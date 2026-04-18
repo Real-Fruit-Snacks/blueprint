@@ -2025,7 +2025,9 @@ body {
     min-height: 50px;
     align-items: center;
   }
-  .logo { font-size: 11px; letter-spacing: 2px; flex: 0 0 auto; }
+  /* The logo is decorative on mobile — the tab bar makes it obvious what app
+     this is, so reclaim that horizontal space for tabs + resources. */
+  .logo { display: none; }
   .tabs {
     order: 2;
     flex: 0 0 auto;
