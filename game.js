@@ -3809,6 +3809,7 @@
       <button class="publish-link-btn" data-publish-link>◆ OPEN MASTERY</button>
     `;
     sidebarEl.appendChild(publishBox);
+    addCornerTicks(publishBox);
     dom.side.publishBox = publishBox;
     dom.side.publishGain = publishBox.querySelector('[data-publish-gain]');
     dom.side.publishRunProtos = publishBox.querySelector('[data-run-protos]');
@@ -3823,6 +3824,7 @@
       <div class="support-desc" data-support-hint></div>
     `;
     sidebarEl.appendChild(supportBox);
+    addCornerTicks(supportBox);
     dom.side.supportBox  = supportBox;
     dom.side.supportGrid = supportBox.querySelector('[data-support-grid]');
     dom.side.supportHint = supportBox.querySelector('[data-support-hint]');
@@ -4738,6 +4740,7 @@
         <div class="rows">${researchRows}</div>
       </div>
     `;
+    statsBodyEl.querySelectorAll('.stats-block').forEach(addCornerTicks);
   }
 
   // ---------- MASTERY VIEW ----------
@@ -4940,6 +4943,7 @@
       <div class="section-title">◆ PATENT LIBRARY · SPEND PATENTS FOR PERMANENT BOOSTS</div>
       <div class="patents-grid">${patentCards}</div>
     `;
+    masteryBodyEl.querySelectorAll('.publish-bar').forEach(addCornerTicks);
 
     // wire up handlers (delegate)
     masteryBodyEl.querySelector('[data-publish-btn]')?.addEventListener('click', () => {
