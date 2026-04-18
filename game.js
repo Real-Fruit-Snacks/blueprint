@@ -1868,6 +1868,8 @@
   function setTab(name) {
     const wasTab = state.meta.currentTab;
     state.meta.currentTab = name;
+    // Expose active tab on <body> so CSS can pause animations outside it.
+    document.body.dataset.tab = name;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
     if (name === 'stats') renderStats();
@@ -3524,17 +3526,23 @@
   }
 
   function render() {
-    renderResBar();
-    renderFactory();
-    renderAchievementsSection();
-    updateAchievementProgress();
-    renderSidebar();
-    renderTreeHeader();
-    if (state.meta.currentTab === 'stats' && Date.now() - lastStatsRender > 500) {
+    const tab = state.meta.currentTab;
+    renderResBar();                 // always visible in topbar
+    renderTreeHeader();             // updates RESEARCH tab badge + prestige bar
+    // Tab-gated renders — no point updating DOM the user can't see.
+    if (tab === 'factory') {
+      renderFactory();
+      renderSidebar();
+    }
+    if (tab === 'achievements') {
+      renderAchievementsSection();
+      updateAchievementProgress();
+    }
+    if (tab === 'stats' && Date.now() - lastStatsRender > 500) {
       renderStats();
       lastStatsRender = Date.now();
     }
-    if (state.meta.currentTab === 'mastery' && Date.now() - lastMasteryRender > 500) {
+    if (tab === 'mastery' && Date.now() - lastMasteryRender > 500) {
       renderMastery();
       lastMasteryRender = Date.now();
     }
@@ -3543,8 +3551,15 @@
   let lastMasteryRender = 0;
 
   // ---------- MAIN LOOP ----------
+  // tick() runs every RAF for smooth number accumulation; render() is
+  // throttled to ~15fps since UI updates don't need 60fps on a phone and the
+  // constant DOM work was a major heat source. When the tab is hidden we
+  // skip rendering entirely (browsers auto-throttle RAF but the extra guard
+  // keeps the loop's own work flat).
   let lastFrameAt = performance.now();
   let lastSaveCheck = Date.now();
+  let lastRenderAt = 0;
+  const RENDER_INTERVAL_MS = 66; // ~15 FPS UI
   function loop(nowPerf) {
     const dtMs = nowPerf - lastFrameAt;
     lastFrameAt = nowPerf;
@@ -3556,7 +3571,11 @@
     if (Date.now() - lastSaveCheck > SAVE_INTERVAL) { lastSaveCheck = Date.now(); save(); }
     checkUnlockChanges();
     checkAchievements();
-    render();
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (!hidden && nowPerf - lastRenderAt >= RENDER_INTERVAL_MS) {
+      lastRenderAt = nowPerf;
+      render();
+    }
     requestAnimationFrame(loop);
   }
 

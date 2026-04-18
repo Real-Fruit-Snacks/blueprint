@@ -1767,16 +1767,18 @@ body {
   100% { stroke-width: 1.5; }
 }
 
-/* armed (first click received, waiting for confirm) */
+/* armed (first click received, waiting for confirm).
+   Static drop-shadow (cheap); only stroke-width animates. */
 .tree-node.armed .bg {
   stroke: var(--accent);
   stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--accent));
   animation: node-armed 0.7s ease-in-out infinite alternate;
 }
 .tree-node.armed .label { fill: var(--accent); font-weight: bold; }
 @keyframes node-armed {
-  0%   { filter: drop-shadow(0 0 2px var(--accent)); stroke-width: 2.5; }
-  100% { filter: drop-shadow(0 0 14px rgba(255, 214, 112, 0.95)); stroke-width: 4; }
+  0%   { stroke-width: 2.5; }
+  100% { stroke-width: 4;   }
 }
 
 .tree-tooltip .tip-confirm {
@@ -1797,23 +1799,35 @@ body {
   100% { opacity: 1; }
 }
 
-/* affordable (available + enough schematics) — branch-color glow pulse */
+/* Affordable (available + enough schematics) — branch-color glow pulse.
+   The glow used to animate the filter: drop-shadow blur radius (3px→12px)
+   which forces a GPU blur recompute every frame and was the single biggest
+   source of heat on mobile. Now the blur is STATIC (4px) and only the
+   stroke-width pulses — visually similar, dramatically cheaper. */
 .tree-node.affordable .bg {
+  filter: drop-shadow(0 0 4px var(--branch-color));
   animation: node-glow 1.8s ease-in-out infinite;
 }
 .tree-node.affordable .label {
   fill: var(--white);
 }
 @keyframes node-glow {
-  0%, 100% {
-    stroke-width: 2;
-    filter: drop-shadow(0 0 3px var(--branch-color));
-  }
-  50% {
-    stroke-width: 3.5;
-    filter: drop-shadow(0 0 12px var(--branch-color));
-  }
+  0%, 100% { stroke-width: 2;   }
+  50%      { stroke-width: 3.5; }
 }
+
+/* Pause expensive tree animations when the tree tab isn't showing — they
+   were running 24/7 even on the factory page. */
+body:not([data-tab="tree"]) .tree-node.affordable .bg,
+body:not([data-tab="tree"]) .tree-node.armed .bg,
+body:not([data-tab="tree"]) .tier-unlock.affordable {
+  animation: none;
+}
+/* Same idea for the other always-pulsing animations when not on their tab */
+body:not([data-tab="achievements"]) .ach.new,
+body:not([data-tab="achievements"]) .ach-new-dot,
+body:not([data-tab="achievements"]) .ach-page-new { animation: none; }
+body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
 /* .pulse override (brief purchase confirmation) should still work over glow */
 .tree-node.affordable.pulse .bg {
   animation: node-pulse 0.5s ease-out, node-glow 1.8s ease-in-out infinite 0.5s;
