@@ -1793,6 +1793,36 @@ body {
   100% { stroke-width: 1.5; }
 }
 
+/* armed (first click received, waiting for confirm) */
+.tree-node.armed .bg {
+  stroke: var(--accent);
+  stroke-width: 3;
+  animation: node-armed 0.7s ease-in-out infinite alternate;
+}
+.tree-node.armed .label { fill: var(--accent); font-weight: bold; }
+@keyframes node-armed {
+  0%   { filter: drop-shadow(0 0 2px var(--accent)); stroke-width: 2.5; }
+  100% { filter: drop-shadow(0 0 14px rgba(255, 214, 112, 0.95)); stroke-width: 4; }
+}
+
+.tree-tooltip .tip-confirm {
+  margin-top: 8px;
+  padding: 5px 8px;
+  background: rgba(255, 214, 112, 0.18);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  font-weight: bold;
+  text-align: center;
+  animation: tip-confirm-pulse 0.7s ease-in-out infinite alternate;
+}
+@keyframes tip-confirm-pulse {
+  0%   { opacity: 0.75; }
+  100% { opacity: 1; }
+}
+
 /* affordable (available + enough schematics) — gold glow pulse */
 .tree-node.affordable .bg {
   animation: node-glow 1.8s ease-in-out infinite;

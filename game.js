@@ -2445,7 +2445,18 @@
 
       grp.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (researchBuy(id)) { pulseNode(grp); renderTree(); renderTooltipFor(id); }
+        // Only arm nodes that could actually be purchased (ignore owned / locked / prereq-missing)
+        if (nodeState(id) !== 'available') { disarmNode(); renderTree(); return; }
+        if (armedNode === id) {
+          // second click → confirm
+          if (researchBuy(id)) pulseNode(grp);
+          disarmNode();
+        } else {
+          // first click → arm
+          armNode(id);
+        }
+        renderTree();
+        renderTooltipFor(id);
       });
       grp.addEventListener('mouseenter', () => renderTooltipFor(id));
       grp.addEventListener('mouseleave', () => hideTooltip());
@@ -2462,6 +2473,23 @@
 
   function pulseNode(g) { g.classList.remove('pulse'); void g.getBBox(); g.classList.add('pulse'); }
 
+  // Two-click confirmation system for tree purchases.
+  let armedNode = null;
+  let armedResetTimeout = null;
+  const ARMED_WINDOW_MS = 3000;
+  function armNode(id) {
+    armedNode = id;
+    if (armedResetTimeout) clearTimeout(armedResetTimeout);
+    armedResetTimeout = setTimeout(() => {
+      armedNode = null;
+      renderTree();
+    }, ARMED_WINDOW_MS);
+  }
+  function disarmNode() {
+    armedNode = null;
+    if (armedResetTimeout) { clearTimeout(armedResetTimeout); armedResetTimeout = null; }
+  }
+
   function renderTree() {
     for (const id in dom.treeNodes) {
       const g = dom.treeNodes[id];
@@ -2469,12 +2497,13 @@
       g.style.display = revealed ? '' : 'none';
       if (!revealed) continue;
       const st = nodeState(id);
-      g.classList.remove('owned', 'available', 'locked', 'origin', 'affordable');
+      g.classList.remove('owned', 'available', 'locked', 'origin', 'affordable', 'armed');
       if (id === 'origin') g.classList.add('origin');
       g.classList.add(st);
       if (st === 'available' && state.meta.schematics >= nodeNextCost(id)) {
         g.classList.add('affordable');
       }
+      if (id === armedNode) g.classList.add('armed');
     }
     // level text — shows the CURRENT level of the node (e.g. "Lv 3/5")
     for (const id in dom.treeLevelTexts) {
@@ -2534,11 +2563,13 @@
 
     const typeTag = n.type === 'leveled' ? '<span style="color:#78e08f">LEVELED</span>' : n.type === 'unlock' ? '<span style="color:#ffd670">UNLOCK</span>' : '';
 
+    const confirmHint = (id === armedNode) ? `<div class="tip-confirm">◆ CLICK AGAIN TO CONFIRM</div>` : '';
     treeTip.innerHTML = `
       <div class="tip-name">${n.name} ${typeTag}</div>
       <div class="tip-desc">${n.desc}</div>
       ${costHtml}
       ${reqHtml}
+      ${confirmHint}
     `;
     treeTip.style.display = 'block';
     positionTooltip();
@@ -2654,6 +2685,8 @@
     });
     treeCanvas.addEventListener('mousedown', (e) => {
       if (e.target.closest('.tree-node')) return;
+      // Background click → disarm any pending two-click confirmation
+      if (armedNode !== null) { disarmNode(); renderTree(); }
       dragging = true;
       dragStart = { x: e.clientX, y: e.clientY, vbx: viewBox.x, vby: viewBox.y };
       treeCanvas.classList.add('dragging');
