@@ -1038,18 +1038,6 @@ body {
   .slot .auto-chip { width: 24px; height: 24px; font-size: 11px; }
 }
 
-/* tree leveled node indicator (current level count shown just below node) */
-.tree-node .level-text {
-  font-size: 9px;
-  fill: var(--accent);
-  text-anchor: middle;
-  pointer-events: none;
-  font-family: var(--font-mono);
-  font-weight: bold;
-  letter-spacing: 0.5px;
-}
-.tree-node.owned .level-text { fill: var(--ok); }
-
 /* Activity log / TIPS sidebar panel removed — tips now fire as toast popups. */
 
 /* welcome-back earnings list */
@@ -1578,278 +1566,416 @@ body {
 .tier-unlock.unaffordable .tu-state { color: var(--warn); }
 .tier-unlock.locked .tu-state { color: var(--text-dim); }
 
-.tree-canvas {
+/* =========================================================================
+   RESEARCH · PARALLEL RAILS
+   Horizontal assembly-line view. Each branch = one track. Ring tier
+   labels run across the top; nodes sit evenly across each track on a
+   backbone line. Clicking a node arms it; clicking again confirms the buy.
+   Branch color is applied via the --branch-color custom property (set by
+   .br-speed etc) so one set of state rules handles all branches.
+   ========================================================================= */
+
+/* Branch palette — shared with any element that carries a .br-* class. */
+.br-speed       { --branch-color: #60d5ff; }
+.br-logistics   { --branch-color: #ff9a7a; }
+.br-yield       { --branch-color: #b9f5a1; }
+.br-automation  { --branch-color: #89b7ff; }
+.br-efficiency  { --branch-color: #c39bff; }
+.br-power       { --branch-color: #ffd670; }
+.br-origin      { --branch-color: #ffd670; }
+
+.rails-scroll {
   flex: 1;
-  position: relative;
-  overflow: hidden;
-  cursor: grab;
+  overflow: auto;
+  padding: 24px;
   background:
-    /* Subtle vignette dimming the corners */
-    radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.35) 100%),
-    /* Soft golden core glow under the origin */
-    radial-gradient(circle at 50% 50%, rgba(255,214,112,0.10) 0%, transparent 22%),
-    /* Faint 'isometric' dot grid — gives the canvas a drafting feel */
-    radial-gradient(circle at 1px 1px, rgba(74,159,207,0.18) 0.8px, transparent 1.4px),
+    /* faint drafting grid */
+    linear-gradient(rgba(74, 159, 207, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 159, 207, 0.05) 1px, transparent 1px),
     var(--bg);
-  background-size:
-    100% 100%,
-    100% 100%,
-    24px 24px,
-    100% 100%;
+  background-size: 24px 24px, 24px 24px, 100% 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
-.tree-zoom {
-  position: absolute;
-  top: 14px; right: 14px;
-  display: flex; flex-direction: column;
-  gap: 4px;
-  z-index: 5;
-}
-.tree-zoom button {
-  width: 34px; height: 34px;
-  background: rgba(13, 59, 79, 0.9);
+/* Main drawing sheet — framed, dark, self-contained. */
+.rails-sheet {
+  position: relative;
+  background: rgba(6, 28, 39, 0.8);
   border: 1px solid var(--line);
-  color: var(--text);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: border-color 0.12s, color 0.12s, background 0.12s;
-  padding: 0;
-}
-.tree-zoom button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(13, 59, 79, 1);
-}
-.tree-zoom button:active {
-  background: rgba(255, 214, 112, 0.1);
-}
-.tree-zoom button svg {
-  width: 16px; height: 16px;
-}
-.tree-zoom button svg line,
-.tree-zoom button svg rect {
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: square;
-  fill: none;
-}
-.tree-zoom button svg circle {
-  fill: currentColor;
-}
-.tree-canvas:active { cursor: grabbing; }
-.tree-canvas.dragging { cursor: grabbing; }
-#tree-svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  user-select: none;
-}
-
-/* schematic background guides drawn inside the SVG */
-.tree-bg-ring {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 0.8;
-  opacity: 0.32;
-  stroke-dasharray: 4 6;
-}
-.tree-bg-spoke {
-  stroke: var(--line);
-  stroke-width: 0.6;
-  opacity: 0.22;
-  stroke-dasharray: 2 6;
-}
-.tree-bg-corner {
-  stroke: var(--accent);
-  stroke-width: 1.4;
-  opacity: 0.6;
-}
-
-/* connection lines — circuit-trace style (45° diagonal then straight,
-   via dot at the corner, solder pad under each node) */
-.tree-line {
-  stroke: var(--line);
-  stroke-width: 1;
-  fill: none;
-  stroke-linejoin: miter;
-  stroke-linecap: round;
-}
-.tree-line.owned {
-  stroke: var(--ok);
-  stroke-width: 1.6;
-}
-.tree-line.locked {
-  stroke-dasharray: 3 3;
-  opacity: 0.5;
-}
-.tree-via {
-  fill: var(--line);
-  stroke: var(--bg-dim);
-  stroke-width: 0.5;
-}
-.tree-via.owned { fill: var(--ok); }
-.tree-via.locked { opacity: 0.5; }
-.tree-pad {
-  fill: var(--line);
-  opacity: 0.18;
-  pointer-events: none;
-}
-.tree-node.owned .tree-pad { fill: var(--ok); opacity: 0.25; }
-.tree-node.available .tree-pad { fill: var(--branch-color); opacity: 0.22; }
-.tree-node.locked .tree-pad { opacity: 0.08; }
-
-/* nodes.
-   Each branch carries a different accent color via --branch-color.
-   State (owned / available / locked) then picks how the color is applied:
-     owned     = filled glow in the branch hue
-     available = outlined in the branch hue with the glyph tinted
-     locked    = desaturated, no branch color (hidden via nodeRevealed anyway)  */
-.tree-node {
-  cursor: pointer;
-  --branch-color: var(--accent);
-}
-.tree-node.br-speed       { --branch-color: #60d5ff; }   /* bright cyan — pace */
-.tree-node.br-logistics   { --branch-color: #ff9a7a; }   /* warm coral — click power */
-.tree-node.br-yield       { --branch-color: #b9f5a1; }   /* soft lime — output */
-.tree-node.br-automation  { --branch-color: #89b7ff; }   /* soft blue — auto */
-.tree-node.br-efficiency  { --branch-color: #c39bff; }   /* lavender — efficiency */
-.tree-node.br-power       { --branch-color: #ffd670; }   /* gold — power */
-.tree-node.br-origin      { --branch-color: #ffffff; }
-
-.tree-node .bg {
-  fill: var(--bg);
-  stroke: var(--line);
-  stroke-width: 1.5;
-  transition: stroke 0.12s, fill 0.12s;
-}
-.tree-node.owned     .bg { stroke: var(--ok);            fill: var(--bg-dim); }
-.tree-node.available .bg { stroke: var(--branch-color);  fill: var(--bg-dim); }
-.tree-node.locked    .bg { stroke: var(--line);          opacity: 0.55; }
-.tree-node.origin    .bg { stroke: var(--branch-color);  stroke-width: 2.5; fill: var(--bg-dim); }
-
-/* Inner schematic ring — sits just inside the main circle, faint by default
-   and tints to the branch / state color when the node is interactive. */
-.tree-node .inner-ring {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 0.6;
-  opacity: 0.35;
-  pointer-events: none;
-}
-.tree-node.owned     .inner-ring { stroke: var(--ok);           opacity: 0.6; }
-.tree-node.available .inner-ring { stroke: var(--branch-color); opacity: 0.55; }
-.tree-node.locked    .inner-ring { opacity: 0.18; }
-.tree-node.origin    .inner-ring { stroke: var(--branch-color); opacity: 0.7; }
-
-/* Cardinal ticks — tiny lines at compass points just outside the circle,
-   added only on origin + first-ring nodes (set via JS). */
-.tree-node .node-tick {
-  stroke: var(--line);
-  stroke-width: 1;
-  opacity: 0.5;
-  pointer-events: none;
-}
-.tree-node.owned     .node-tick { stroke: var(--ok);           opacity: 0.85; }
-.tree-node.available .node-tick { stroke: var(--branch-color); opacity: 0.85; }
-.tree-node.locked    .node-tick { opacity: 0.25; }
-.tree-node.origin    .node-tick { stroke: var(--branch-color); opacity: 1; }
-
-.tree-node:hover .bg { stroke: var(--white); }
-
-.tree-node .glyph {
-  pointer-events: none;
-}
-.tree-node.owned     .glyph { fill: var(--ok); }
-.tree-node.available .glyph { fill: var(--branch-color); }
-.tree-node.locked    .glyph { fill: var(--text-dim); opacity: 0.5; }
-.tree-node.origin    .glyph { fill: var(--branch-color); }
-
-.tree-node .label {
-  font-family: 'Segoe UI', sans-serif;
-  font-size: 8px;
-  letter-spacing: 1.2px;
-  fill: var(--text);
-  text-anchor: middle;
-  pointer-events: none;
-}
-.tree-node.owned     .label { fill: var(--ok); }
-.tree-node.available .label { fill: var(--branch-color); }
-.tree-node.locked    .label { fill: var(--text-dim); opacity: 0.7; }
-
-.tree-node.pulse .bg {
-  animation: node-pulse 0.5s ease-out;
-}
-@keyframes node-pulse {
-  0%   { stroke-width: 1.5; }
-  50%  { stroke-width: 5; }
-  100% { stroke-width: 1.5; }
-}
-
-/* armed (first click received, waiting for confirm).
-   Static drop-shadow (cheap); only stroke-width animates. */
-.tree-node.armed .bg {
-  stroke: var(--accent);
-  stroke-width: 3;
-  filter: drop-shadow(0 0 6px var(--accent));
-  animation: node-armed 0.7s ease-in-out infinite alternate;
-}
-.tree-node.armed .label { fill: var(--accent); font-weight: bold; }
-@keyframes node-armed {
-  0%   { stroke-width: 2.5; }
-  100% { stroke-width: 4;   }
-}
-
-.tree-tooltip .tip-confirm {
-  margin-top: 8px;
-  padding: 5px 8px;
-  background: rgba(255, 214, 112, 0.18);
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  padding: 28px 32px 32px;
+  min-width: 860px;   /* keeps tier columns readable; scroll beyond that on mobile */
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  font-weight: bold;
+}
+.rails-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid var(--line-dim);
+  pointer-events: none;
+}
+
+/* Drafting corner ticks — subtle L-shaped marks at each corner of the sheet. */
+.sheet-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 2;
+}
+.sheet-corner svg {
+  display: block;
+  stroke: var(--line);
+  stroke-width: 1;
+  fill: none;
+}
+.sheet-corner-tl { top: 3px; left: 3px; }
+.sheet-corner-tr { top: 3px; right: 3px; transform: scaleX(-1); }
+.sheet-corner-bl { bottom: 3px; left: 3px; transform: scaleY(-1); }
+.sheet-corner-br { bottom: 3px; right: 3px; transform: scale(-1); }
+
+/* Tier column headers — align exactly with the rail cells below via a
+   shared 140px / 1fr / 80px three-column grid. */
+.rails-ringbar {
+  display: grid;
+  grid-template-columns: 140px 1fr 80px;
+  align-items: baseline;
+  column-gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px dashed var(--line-dim);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+}
+.rails-ringbar .rb-left,
+.rails-ringbar .rb-right {
+  color: var(--text-dim);
+}
+.rails-ringbar .rb-right { text-align: right; }
+.rails-ringbar .rb-tiers {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
   text-align: center;
-  animation: tip-confirm-pulse 0.7s ease-in-out infinite alternate;
 }
-@keyframes tip-confirm-pulse {
-  0%   { opacity: 0.75; }
-  100% { opacity: 1; }
+.rails-ringbar .rb-col {
+  padding: 2px 0;
+  color: var(--text-dim);
 }
 
-/* Affordable (available + enough schematics) — branch-color glow pulse.
-   The glow used to animate the filter: drop-shadow blur radius (3px→12px)
-   which forces a GPU blur recompute every frame and was the single biggest
-   source of heat on mobile. Now the blur is STATIC (4px) and only the
-   stroke-width pulses — visually similar, dramatically cheaper. */
-.tree-node.affordable .bg {
+/* Origin starter — prominent "click to begin" before purchase, compact
+   "network seeded" marker after. */
+.rails-origin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 16px 20px 16px 24px;
+  margin-bottom: 20px;
+  border: 1px solid var(--accent);
+  background: linear-gradient(90deg, rgba(255, 214, 112, 0.10), rgba(255, 214, 112, 0.02) 80%);
+  transition: border-color 0.2s, background 0.2s;
+}
+.rails-origin::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  transition: background 0.2s;
+}
+.rails-origin.seeded {
+  border-color: rgba(120, 224, 143, 0.5);
+  background: linear-gradient(90deg, rgba(120, 224, 143, 0.06), rgba(120, 224, 143, 0.01) 80%);
+}
+.rails-origin.seeded::before { background: var(--ok); }
+
+.rails-origin .rail-node {
+  --branch-color: var(--accent);
+  padding: 2px;
+  flex-shrink: 0;
+}
+.rails-origin .rail-node .rn-circle {
+  width: 44px;
+  height: 44px;
+  border-width: 2px;
+}
+.rails-origin .rail-node .rn-glyph {
+  width: 18px;
+  height: 18px;
+}
+.rails-origin .rail-node .rn-name {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  font-weight: bold;
+}
+.rails-origin .rail-node.owned .rn-name,
+.rails-origin .rail-node.owned .rn-cost { color: var(--ok); }
+
+.rails-origin .ro-info { flex: 1; min-width: 0; }
+.rails-origin .ro-label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--white);
+  font-weight: 600;
+}
+.rails-origin .ro-sub {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+.rails-origin.seeded .ro-label { color: var(--ok); opacity: 0.85; }
+
+.rails-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.rail {
+  display: grid;
+  grid-template-columns: 140px 1fr 80px;
+  align-items: center;
+  column-gap: 12px;
+  padding: 14px 0;
+  position: relative;
+}
+.rail + .rail {
+  border-top: 1px dashed rgba(74, 159, 207, 0.14);
+}
+
+/* Branch label — colored dot + name. */
+.rail-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 2.5px;
+  color: var(--branch-color, var(--text));
+  font-weight: 500;
+}
+.rail-label .rl-glyph {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--branch-color, var(--text));
+  box-shadow: 0 0 6px var(--branch-color, transparent);
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+.rail-label .rl-name {
+  white-space: nowrap;
+}
+
+/* Track: backbone runs the full width, nodes sit in 8 even grid cells on top. */
+.rail-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  align-items: center;
+  min-height: 74px;
+}
+
+/* Backbone = dashed horizontal line across the whole track at vertical center.
+   The "fill" is a solid colored portion that extends up to the last owned node. */
+.rail-backbone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background-image: linear-gradient(to right, var(--line-dim) 50%, transparent 50%);
+  background-size: 6px 1px;
+  background-repeat: repeat-x;
+  pointer-events: none;
+}
+.rail-backbone-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: var(--branch-color, var(--text));
+  opacity: 0.75;
+  box-shadow: 0 0 6px var(--branch-color, transparent);
+  transition: width 0.3s ease-out;
+}
+
+.rail-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+/* The node itself — stack of name / circle / cost. */
+.rail-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 2px;
+  user-select: none;
+  --branch-color: var(--text);
+  transition: transform 0.12s;
+}
+.rail-node:hover {
+  transform: translateY(-1px);
+}
+.rail-node .rn-name {
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  color: var(--branch-color);
+  text-align: center;
+  max-width: 90px;
+  line-height: 1.15;
+  min-height: 9px;
+}
+.rail-node .rn-circle {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--branch-color);
+  background: var(--bg-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: border-width 0.12s, box-shadow 0.2s, background 0.12s;
+}
+.rail-node .rn-circle::before {
+  /* inner schematic ring */
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 0.5px solid var(--branch-color);
+  border-radius: 50%;
+  opacity: 0.45;
+  pointer-events: none;
+}
+.rail-node .rn-glyph {
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.rail-node .rn-glyph .glyph {
+  fill: var(--branch-color);
+}
+.rail-node .rn-level {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  font-weight: bold;
+  font-family: var(--font-mono);
+  min-height: 9px;
+}
+.rail-node .rn-cost {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  min-height: 9px;
+}
+
+/* ---- State styles ---- */
+.rail-node.available .rn-circle      { border-color: var(--branch-color); }
+.rail-node.available .rn-name        { color: var(--branch-color); }
+.rail-node.available .rn-cost        { color: var(--accent); }
+
+.rail-node.owned .rn-circle          { border-color: var(--ok); background: rgba(120, 224, 143, 0.08); }
+.rail-node.owned .rn-circle::before  { border-color: var(--ok); }
+.rail-node.owned .rn-glyph .glyph    { fill: var(--ok); }
+.rail-node.owned .rn-name            { color: var(--ok); }
+.rail-node.owned .rn-cost            { color: var(--ok); opacity: 0.8; }
+.rail-node.owned .rn-level           { color: var(--ok); }
+
+.rail-node.locked                    { cursor: not-allowed; }
+.rail-node.locked .rn-circle         { border-style: dashed; border-color: var(--line-dim); opacity: 0.65; }
+.rail-node.locked .rn-circle::before { opacity: 0.15; }
+.rail-node.locked .rn-glyph .glyph   { fill: var(--text-ghost, var(--text-dim)); opacity: 0.55; }
+.rail-node.locked .rn-name           { color: var(--text-dim); opacity: 0.6; }
+.rail-node.locked .rn-cost           { color: var(--text-dim); opacity: 0.5; }
+
+/* Affordable — static drop-shadow glow (blur radius does NOT animate — same
+   lesson as before: animating blur chokes the GPU on mobile). */
+.rail-node.affordable .rn-circle {
   filter: drop-shadow(0 0 4px var(--branch-color));
-  animation: node-glow 1.8s ease-in-out infinite;
+  animation: rail-node-glow 1.8s ease-in-out infinite;
 }
-.tree-node.affordable .label {
-  fill: var(--white);
+.rail-node.affordable .rn-name {
+  color: var(--white);
 }
-@keyframes node-glow {
-  0%, 100% { stroke-width: 2;   }
-  50%      { stroke-width: 3.5; }
+@keyframes rail-node-glow {
+  0%, 100% { border-width: 1.5px; }
+  50%      { border-width: 2.5px; }
 }
 
-/* Pause expensive tree animations when the tree tab isn't showing — they
-   were running 24/7 even on the factory page. */
-body:not([data-tab="tree"]) .tree-node.affordable .bg,
-body:not([data-tab="tree"]) .tree-node.armed .bg,
+/* Armed — waiting for confirmation click. */
+.rail-node.armed .rn-circle {
+  border-color: var(--accent);
+  border-width: 2px;
+  filter: drop-shadow(0 0 6px var(--accent));
+  animation: rail-node-armed 0.7s ease-in-out infinite alternate;
+}
+.rail-node.armed .rn-name {
+  color: var(--accent);
+  font-weight: bold;
+}
+@keyframes rail-node-armed {
+  0%   { border-width: 2px; }
+  100% { border-width: 3px; }
+}
+
+/* Purchase pulse — quick flash on the circle. */
+.rail-node.pulse .rn-circle {
+  animation: rail-node-pulse 0.45s ease-out;
+}
+@keyframes rail-node-pulse {
+  0%   { transform: scale(1);    }
+  45%  { transform: scale(1.25); box-shadow: 0 0 18px var(--branch-color); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 transparent; }
+}
+
+/* Affordable + pulse combo — keep the glow going after the quick pulse. */
+.rail-node.affordable.pulse .rn-circle {
+  animation: rail-node-pulse 0.45s ease-out, rail-node-glow 1.8s ease-in-out infinite 0.45s;
+}
+
+/* Progress counter on the right end of each rail. */
+.rail-progress {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rail-progress b {
+  color: var(--branch-color, var(--white));
+  font-size: 16px;
+  font-weight: bold;
+}
+.rail-progress .rp-sep { margin: 0 2px; opacity: 0.5; }
+.rail-progress .rp-max { opacity: 0.7; }
+.rail-progress.complete b { color: var(--ok); }
+.rail-progress.complete .rp-max { color: var(--ok); opacity: 1; }
+
+/* Pause the rails' pulsing animations when another tab is active. */
+body:not([data-tab="tree"]) .rail-node.affordable .rn-circle,
+body:not([data-tab="tree"]) .rail-node.armed .rn-circle,
 body:not([data-tab="tree"]) .tier-unlock.affordable {
   animation: none;
 }
-/* Same idea for the other always-pulsing animations when not on their tab */
 body:not([data-tab="achievements"]) .ach.new,
 body:not([data-tab="achievements"]) .ach-new-dot,
 body:not([data-tab="achievements"]) .ach-page-new { animation: none; }
 body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
-/* .pulse override (brief purchase confirmation) should still work over glow */
-.tree-node.affordable.pulse .bg {
-  animation: node-pulse 0.5s ease-out, node-glow 1.8s ease-in-out infinite 0.5s;
-}
 
 /* tooltip */
 .tree-tooltip {
@@ -1889,31 +2015,6 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   letter-spacing: 1px;
   margin-top: 6px;
   font-family: var(--font-mono);
-}
-
-/* legend */
-.tree-legend {
-  padding: 8px 20px;
-  border-top: 1px solid var(--line);
-  background: var(--panel-2);
-  display: flex; gap: 18px; align-items: center;
-  font-size: 10px; color: var(--text); letter-spacing: 1px;
-}
-.tree-legend .item {
-  display: flex; align-items: center; gap: 6px;
-}
-.tree-legend .sw {
-  width: 10px; height: 10px;
-  border: 1px solid var(--line);
-  background: var(--bg-dim);
-}
-.tree-legend .sw.owned  { border-color: var(--ok); }
-.tree-legend .sw.avail  { border-color: var(--accent); }
-.tree-legend .sw.locked { border-style: dashed; opacity: 0.55; }
-.tree-legend .hint {
-  margin-left: auto;
-  color: var(--text-dim); font-style: italic;
-  font-family: var(--font-ui);
 }
 
 /* ========== MODAL (used by export/import) ========== */
@@ -2157,19 +2258,20 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   .rp-rate { font-size: 10px; }
   .tier-unlocks-bar { padding: 8px 10px; gap: 8px; -webkit-overflow-scrolling: touch; }
   .tier-unlock { min-width: 130px; padding: 8px 10px; min-height: 52px; }
-  .tree-canvas { touch-action: none; }
-  .tree-zoom { top: 10px; right: 10px; gap: 6px; }
-  .tree-zoom button {
-    width: 42px; height: 42px;
-  }
-  .tree-zoom button svg { width: 20px; height: 20px; }
-  .tree-legend {
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 6px 12px;
-    font-size: 9px;
-  }
-  .tree-legend .hint { display: none; }
+  /* Rails sheet on mobile — reduce padding and let horizontal scroll kick in
+     once the 8-tier grid no longer fits in the viewport. */
+  .rails-scroll { padding: 12px; }
+  .rails-sheet { padding: 18px 20px 20px; min-width: 720px; }
+  .rails-ringbar { grid-template-columns: 100px 1fr 60px; column-gap: 8px; }
+  .rail { grid-template-columns: 100px 1fr 60px; column-gap: 8px; padding: 10px 0; }
+  .rail-label { font-size: 11px; letter-spacing: 1.6px; gap: 6px; }
+  .rail-label .rl-glyph { width: 10px; height: 10px; }
+  .rail-node .rn-circle { width: 28px; height: 28px; }
+  .rail-node .rn-glyph { width: 12px; height: 12px; }
+  .rail-node .rn-name { font-size: 7px; max-width: 70px; }
+  .rail-node .rn-cost, .rail-node .rn-level { font-size: 7px; }
+  .rail-progress { font-size: 11px; }
+  .rail-progress b { font-size: 14px; }
   .tree-tooltip {
     width: auto;
     max-width: calc(100vw - 24px);
@@ -2270,5 +2372,5 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   }
 
   .tree-header { flex-direction: row; padding: 6px 14px; }
-  .tree-zoom button { width: 38px; height: 38px; }
+  .rails-sheet { min-width: 680px; padding: 14px 16px 16px; }
 }

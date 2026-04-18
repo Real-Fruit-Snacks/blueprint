@@ -1834,8 +1834,6 @@
   const factoryEl   = document.getElementById('factory');
   const sidebarEl   = document.getElementById('sidebar');
   const factoryViewEl = document.getElementById('view-factory');
-  const treeSvg     = document.getElementById('tree-svg');
-  const treeCanvas  = document.getElementById('tree-canvas');
   const treeTip     = document.getElementById('tree-tip');
   const rpValueEl   = document.getElementById('rp-value');
   const rpRateEl    = document.getElementById('rp-rate');
@@ -1862,7 +1860,7 @@
   function isSyntheticMouseFromTouch() {
     return Date.now() - lastTouchTime < 700;
   }
-  const dom = { tiers: {}, mineCard: null, side: {}, treeNodes: {}, treeLines: [], treeLevelTexts: {}, tierUnlockBtns: {} };
+  const dom = { tiers: {}, mineCard: null, side: {}, tierUnlockBtns: {}, railNodes: {}, railProgress: {}, railBackboneFills: {}, railRails: {} };
 
   // ---------- TABS ----------
   function setTab(name) {
@@ -2470,7 +2468,7 @@
           renderTierUnlocksBar();
           buildFactory();
           buildResBar();
-          renderTree();
+          renderRails();
         }
       });
       tierUnlocksBar.appendChild(btn);
@@ -2496,25 +2494,13 @@
     }
   }
 
-  // ---------- TREE ----------
-  const SVG_NS = 'http://www.w3.org/2000/svg';
-  function svgEl(tag, attrs = {}) {
-    const e = document.createElementNS(SVG_NS, tag);
-    for (const k in attrs) e.setAttribute(k, attrs[k]);
-    return e;
-  }
-  const TREE_CX = 600, TREE_CY = 600;
-  const TREE_RADII = { 0: 0, 1: 85, 2: 155, 3: 225, 4: 295, 5: 365, 6: 435, 7: 505, 8: 575 };
-  function treePos(nodeId) {
-    const n = TREE_NODES[nodeId];
-    // Per-ring zigzag: alternate each ring's angular offset so consecutive
-    // nodes in a branch don't sit on a straight spoke. Gives the circuit-
-    // trace routing real diagonal segments to work with instead of micro-Ls.
-    const zigzagDeg = n.pos.r === 0 ? 0 : (n.pos.r % 2 === 0 ? -7 : 7);
-    const rad = (n.pos.angle + zigzagDeg) * Math.PI / 180;
-    const r = TREE_RADII[n.pos.r];
-    return { x: TREE_CX + r * Math.sin(rad), y: TREE_CY - r * Math.cos(rad) };
-  }
+  // ---------- RESEARCH TREE (parallel rails) ----------
+  // Each branch becomes a horizontal "assembly track" — 8 tier slots laid out
+  // left→right, with a backbone line running through them and a progress
+  // counter at the end. Read-at-a-glance layout that scales cleanly to mobile.
+  const RAILS_TIERS = 8;
+  const BRANCH_DISPLAY_ORDER = ['speed', 'logistics', 'yield', 'automation', 'efficiency', 'power'];
+
   function nodeState(id) {
     const lvl = nodeLevel(id);
     const max = nodeMax(id);
@@ -2523,183 +2509,15 @@
     return 'available';
   }
 
-  function buildTree() {
-    treeSvg.innerHTML = '';
-
-    // BACKGROUND LAYER — schematic grid: concentric tier rings + radial spokes
-    // along each branch axis. Drawn first so everything else sits on top.
-    const bg = svgEl('g', { id: 'tree-bg' });
-    treeSvg.appendChild(bg);
-    // Cardinal/branch spokes
-    [0, 60, 120, 180, 240, 300].forEach(angle => {
-      const rad = angle * Math.PI / 180;
-      const r = TREE_RADII[8] + 30;
-      const x2 = TREE_CX + r * Math.sin(rad);
-      const y2 = TREE_CY - r * Math.cos(rad);
-      const line = svgEl('line', { x1: TREE_CX, y1: TREE_CY, x2, y2 });
-      line.classList.add('tree-bg-spoke');
-      bg.appendChild(line);
-    });
-    // Tier rings — one per ring radius the nodes occupy
-    [1, 2, 3, 4, 5, 6, 7, 8].forEach(ringIdx => {
-      const ring = svgEl('circle', { cx: TREE_CX, cy: TREE_CY, r: TREE_RADII[ringIdx] });
-      ring.classList.add('tree-bg-ring');
-      bg.appendChild(ring);
-    });
-    // Outer corner brackets — give the canvas an "engineering drawing" frame.
-    const cornerSize = 30;
-    const margin = TREE_RADII[8] + 20;
-    const corners = [
-      { x: TREE_CX - margin, y: TREE_CY - margin, dx: 1, dy: 1 },
-      { x: TREE_CX + margin, y: TREE_CY - margin, dx: -1, dy: 1 },
-      { x: TREE_CX - margin, y: TREE_CY + margin, dx: 1, dy: -1 },
-      { x: TREE_CX + margin, y: TREE_CY + margin, dx: -1, dy: -1 },
-    ];
-    corners.forEach(c => {
-      const h = svgEl('line', { x1: c.x, y1: c.y, x2: c.x + cornerSize * c.dx, y2: c.y });
-      const v = svgEl('line', { x1: c.x, y1: c.y, x2: c.x, y2: c.y + cornerSize * c.dy });
-      h.classList.add('tree-bg-corner');
-      v.classList.add('tree-bg-corner');
-      bg.appendChild(h); bg.appendChild(v);
-    });
-
-    const g = svgEl('g', { id: 'tree-g' });
-    treeSvg.appendChild(g);
-
-    // Circuit-trace routing: 45° diagonal from parent until one axis matches,
-    // then straight to the child. A via dot is dropped at the corner.
-    dom.treeLines = [];
-    dom.treeVias = [];
-    for (const id in TREE_NODES) {
-      const n = TREE_NODES[id];
-      const to = treePos(id);
-      for (const req of n.requires) {
-        const from = treePos(req);
-        const dx = to.x - from.x, dy = to.y - from.y;
-        const absDx = Math.abs(dx), absDy = Math.abs(dy);
-        const step = Math.min(absDx, absDy);
-        const sx = Math.sign(dx), sy = Math.sign(dy);
-        const bx = from.x + sx * step;
-        const by = from.y + sy * step;
-        const path = svgEl('path', {
-          d: `M ${from.x} ${from.y} L ${bx} ${by} L ${to.x} ${to.y}`,
-        });
-        path.classList.add('tree-line');
-        path.dataset.from = req; path.dataset.to = id;
-        g.appendChild(path);
-        dom.treeLines.push(path);
-        // Via dot only when there's an actual corner worth marking
-        if (step > 2 && Math.abs(absDx - absDy) > 2) {
-          const via = svgEl('circle', { cx: bx, cy: by, r: 2 });
-          via.classList.add('tree-via');
-          via.dataset.from = req; via.dataset.to = id;
-          g.appendChild(via);
-          dom.treeVias.push(via);
-        }
-      }
-    }
-
-    dom.treeNodes = {};
-    dom.treeLevelTexts = {};
-    for (const id in TREE_NODES) {
-      const n = TREE_NODES[id];
-      const p = treePos(id);
-      const grp = svgEl('g', { transform: `translate(${p.x}, ${p.y})` });
-      grp.classList.add('tree-node');
-      if (n.branch) grp.classList.add('br-' + n.branch);
-      grp.dataset.node = id;
-      const radius = id === 'origin' ? 22 : (n.pos.r === 1 ? 16 : 13);
-
-      // Circuit-trace landing pad — dim ring sitting under the node, reads as a solder pad
-      if (id !== 'origin') {
-        const pad = svgEl('circle', { cx: 0, cy: 0, r: radius + 3 });
-        pad.classList.add('tree-pad');
-        grp.appendChild(pad);
-      }
-
-      const bg = svgEl('circle', { cx: 0, cy: 0, r: radius });
-      bg.classList.add('bg');
-      grp.appendChild(bg);
-
-      // Inner ring + cardinal tick marks — schematic-component detail.
-      const innerRing = svgEl('circle', { cx: 0, cy: 0, r: radius - 4 });
-      innerRing.classList.add('inner-ring');
-      grp.appendChild(innerRing);
-      // 4 short cardinal ticks just outside the main circle (N/E/S/W) — only on
-      // larger nodes (origin + first ring) so smaller nodes don't get cluttered.
-      if (id === 'origin' || n.pos.r === 1) {
-        const tick = 4;
-        const r0 = radius + 1, r1 = radius + 1 + tick;
-        [[0,-1],[1,0],[0,1],[-1,0]].forEach(([dx, dy]) => {
-          const t = svgEl('line', { x1: dx*r0, y1: dy*r0, x2: dx*r1, y2: dy*r1 });
-          t.classList.add('node-tick');
-          grp.appendChild(t);
-        });
-      }
-
-      const glyphWrap = svgEl('g');
-      glyphWrap.innerHTML = BRANCH_GLYPHS[n.branch] || BRANCH_GLYPHS.origin;
-      while (glyphWrap.firstChild) grp.appendChild(glyphWrap.firstChild);
-
-      // level text for leveled nodes — goes just below the node circle
-      if (n.type === 'leveled') {
-        const lvlText = svgEl('text', { x: 0, y: radius + 13, class: 'level-text' });
-        lvlText.textContent = '';
-        grp.appendChild(lvlText);
-        dom.treeLevelTexts[id] = lvlText;
-      }
-
-      // name label goes further below (pushed down for leveled nodes so it doesn't collide with level text)
-      const labelY = radius + (n.type === 'leveled' ? 26 : 15);
-      const label = svgEl('text', { x: 0, y: labelY, class: 'label' });
-      label.textContent = n.name;
-      grp.appendChild(label);
-
-      grp.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // Update tooltip anchor from click coords — so taps (no mousemove) still place the tip correctly.
-        if (typeof e.clientX === 'number' && (e.clientX || e.clientY)) {
-          lastTipMouse.x = e.clientX; lastTipMouse.y = e.clientY;
-        } else {
-          // Fallback: anchor to the node itself (center in viewport coords).
-          const r = grp.getBoundingClientRect();
-          lastTipMouse.x = r.left + r.width / 2;
-          lastTipMouse.y = r.top + r.height / 2;
-        }
-        // Only arm nodes that could actually be purchased — skip owned / locked / prereq-missing
-        // and also skip "available but unaffordable" so we don't promise a confirm click the user can't deliver.
-        if (nodeState(id) !== 'available' || state.meta.schematics < nodeNextCost(id)) {
-          disarmNode(); renderTree(); renderTooltipFor(id); return;
-        }
-        if (armedNode === id) {
-          // second click → confirm
-          if (researchBuy(id)) { pulseNode(grp); haptic(20); }
-          disarmNode();
-        } else {
-          // first click → arm
-          armNode(id);
-          audio.researchArm();
-          haptic(4);
-        }
-        renderTree();
-        renderTooltipFor(id);
-      });
-      grp.addEventListener('mouseenter', () => renderTooltipFor(id));
-      grp.addEventListener('mouseleave', () => hideTooltip());
-      grp.addEventListener('mousemove', moveTooltip);
-
-      g.appendChild(grp);
-      dom.treeNodes[id] = grp;
-    }
-
-    applyViewBox();
-    renderTree();
-    bindTreeInteractions();
+  // Flash a rail node on successful purchase.
+  function pulseNode(el) {
+    if (!el) return;
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
   }
 
-  function pulseNode(g) { g.classList.remove('pulse'); void g.getBBox(); g.classList.add('pulse'); }
-
-  // Two-click confirmation system for tree purchases.
+  // Two-click confirmation for research purchases — first tap arms, second confirms.
   let armedNode = null;
   let armedResetTimeout = null;
   const ARMED_WINDOW_MS = 3000;
@@ -2708,7 +2526,7 @@
     if (armedResetTimeout) clearTimeout(armedResetTimeout);
     armedResetTimeout = setTimeout(() => {
       armedNode = null;
-      renderTree();
+      renderRails();
     }, ARMED_WINDOW_MS);
   }
   function disarmNode() {
@@ -2716,56 +2534,295 @@
     if (armedResetTimeout) { clearTimeout(armedResetTimeout); armedResetTimeout = null; }
   }
 
-  function renderTree() {
-    for (const id in dom.treeNodes) {
-      const g = dom.treeNodes[id];
-      const revealed = nodeRevealed(id);
-      g.style.display = revealed ? '' : 'none';
-      if (!revealed) continue;
-      const st = nodeState(id);
-      g.classList.remove('owned', 'available', 'locked', 'origin', 'affordable', 'armed');
-      if (id === 'origin') g.classList.add('origin');
-      g.classList.add(st);
-      if (st === 'available' && state.meta.schematics >= nodeNextCost(id)) {
-        g.classList.add('affordable');
-      }
-      if (id === armedNode) g.classList.add('armed');
-    }
-    // level text — shows the CURRENT level of the node (e.g. "Lv 3/5")
-    for (const id in dom.treeLevelTexts) {
-      const lvl = nodeLevel(id);
-      const max = nodeMax(id);
-      const t = dom.treeLevelTexts[id];
-      if (lvl <= 0) t.textContent = '';
-      else if (lvl >= max) t.textContent = `MAX ${lvl}/${max === 999 ? '∞' : max}`;
-      else t.textContent = `Lv ${lvl}/${max === 999 ? '∞' : max}`;
-    }
-    // lines — only show when both endpoints revealed
-    dom.treeLines.forEach((line) => {
-      const from = line.dataset.from;
-      const to = line.dataset.to;
-      const bothRevealed = nodeRevealed(from) && nodeRevealed(to);
-      line.style.display = bothRevealed ? '' : 'none';
-      if (!bothRevealed) return;
-      const fromOwned = nodeLevel(from) > 0;
-      const toOwned = nodeLevel(to) > 0;
-      line.classList.toggle('owned', fromOwned && toOwned);
-      line.classList.toggle('locked', !fromOwned);
+  function buildRails() {
+    const sheet = document.getElementById('rails-sheet');
+    if (!sheet) return;
+    sheet.innerHTML = '';
+    // Reset DOM lookups early so anything we register below (origin node,
+    // rail nodes, etc.) isn't wiped by a later initialisation.
+    dom.railNodes = {};
+    dom.railBackboneFills = {};
+    dom.railProgress = {};
+    dom.railRails = {};
+
+    // Drafting-sheet corner ticks.
+    ['tl','tr','bl','br'].forEach(pos => {
+      const c = document.createElement('div');
+      c.className = `sheet-corner sheet-corner-${pos}`;
+      c.innerHTML = '<svg viewBox="0 0 20 20" width="18" height="18"><line x1="0" y1="0" x2="12" y2="0"/><line x1="0" y1="0" x2="0" y2="12"/></svg>';
+      sheet.appendChild(c);
     });
-    // vias — mirror the state of their line
-    if (dom.treeVias) {
-      dom.treeVias.forEach((via) => {
-        const from = via.dataset.from;
-        const to = via.dataset.to;
-        const bothRevealed = nodeRevealed(from) && nodeRevealed(to);
-        via.style.display = bothRevealed ? '' : 'none';
-        if (!bothRevealed) return;
-        const fromOwned = nodeLevel(from) > 0;
-        const toOwned = nodeLevel(to) > 0;
-        via.classList.toggle('owned', fromOwned && toOwned);
-        via.classList.toggle('locked', !fromOwned);
-      });
+
+    // Origin row — the starter node sits above the tier columns. Before
+    // origin is owned, this is the only clickable thing on the sheet; once
+    // owned, it shrinks into a small status marker.
+    const originRow = document.createElement('div');
+    originRow.className = 'rails-origin';
+    const originNode = buildRailNode('origin', 'origin');
+    originRow.appendChild(originNode);
+    const originInfo = document.createElement('div');
+    originInfo.className = 'ro-info';
+    originInfo.innerHTML = `
+      <div class="ro-label" data-origin-label>SEED THE RESEARCH NETWORK</div>
+      <div class="ro-sub" data-origin-sub>The tree unlocks from here. One free click to begin.</div>
+    `;
+    originRow.appendChild(originInfo);
+    sheet.appendChild(originRow);
+    dom.railNodes['origin'] = originNode;
+    dom.railOriginRow = originRow;
+
+    // Ring-bar — tier column headers aligned with node columns below.
+    const ringbar = document.createElement('div');
+    ringbar.className = 'rails-ringbar';
+    const tierCols = Array.from({ length: RAILS_TIERS }, (_, i) =>
+      `<div class="rb-col">R${i + 1}</div>`
+    ).join('');
+    ringbar.innerHTML = `
+      <div class="rb-left">DISCIPLINE</div>
+      <div class="rb-tiers">${tierCols}</div>
+      <div class="rb-right">OWNED</div>
+    `;
+    sheet.appendChild(ringbar);
+
+    const body = document.createElement('div');
+    body.className = 'rails-body';
+    sheet.appendChild(body);
+
+    // Group TREE_NODES by branch, sorted by ring.
+    const byBranch = {};
+    for (const id in TREE_NODES) {
+      const n = TREE_NODES[id];
+      if (!n.branch || n.branch === 'origin') continue;
+      (byBranch[n.branch] = byBranch[n.branch] || []).push({ id, r: n.pos.r });
     }
+    for (const b in byBranch) byBranch[b].sort((a, b) => a.r - b.r);
+
+    BRANCH_DISPLAY_ORDER.forEach(branchId => {
+      if (!byBranch[branchId]) return;
+      const rail = document.createElement('div');
+      rail.className = `rail br-${branchId}`;
+      rail.dataset.branch = branchId;
+
+      // Label: branch glyph + branch name.
+      const label = document.createElement('div');
+      label.className = 'rail-label';
+      label.innerHTML = `
+        <span class="rl-glyph"></span>
+        <span class="rl-name">${branchId.toUpperCase()}</span>
+      `;
+      rail.appendChild(label);
+
+      // Track: backbone + 8 tier cells (may contain a node or be empty).
+      const track = document.createElement('div');
+      track.className = 'rail-track';
+
+      const backbone = document.createElement('div');
+      backbone.className = 'rail-backbone';
+      const bbFill = document.createElement('div');
+      bbFill.className = 'rail-backbone-fill';
+      backbone.appendChild(bbFill);
+      track.appendChild(backbone);
+      dom.railBackboneFills[branchId] = bbFill;
+
+      for (let r = 1; r <= RAILS_TIERS; r++) {
+        const cell = document.createElement('div');
+        cell.className = 'rail-cell';
+        cell.dataset.ring = r;
+        const entry = byBranch[branchId].find(e => e.r === r);
+        if (entry) {
+          const node = buildRailNode(entry.id, branchId);
+          cell.appendChild(node);
+          dom.railNodes[entry.id] = node;
+        }
+        track.appendChild(cell);
+      }
+      rail.appendChild(track);
+
+      const prog = document.createElement('div');
+      prog.className = 'rail-progress';
+      prog.innerHTML = `<b data-prog-owned>0</b><span class="rp-sep">/</span><span class="rp-max">${RAILS_TIERS}</span>`;
+      rail.appendChild(prog);
+      dom.railProgress[branchId] = prog;
+
+      body.appendChild(rail);
+      dom.railRails[branchId] = rail;
+    });
+
+    renderRails();
+    bindRailsInteractions();
+  }
+
+  function buildRailNode(id, branchId) {
+    const n = TREE_NODES[id];
+    const el = document.createElement('div');
+    el.className = `rail-node br-${branchId}`;
+    el.dataset.node = id;
+
+    const name = document.createElement('div');
+    name.className = 'rn-name';
+    name.textContent = n.name;
+    el.appendChild(name);
+
+    const circle = document.createElement('div');
+    circle.className = 'rn-circle';
+    circle.innerHTML = `<svg viewBox="-10 -10 20 20" class="rn-glyph">${BRANCH_GLYPHS[n.branch] || ''}</svg>`;
+    el.appendChild(circle);
+
+    if (n.type === 'leveled') {
+      const lvl = document.createElement('div');
+      lvl.className = 'rn-level';
+      el.appendChild(lvl);
+    }
+
+    const cost = document.createElement('div');
+    cost.className = 'rn-cost';
+    el.appendChild(cost);
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof e.clientX === 'number' && (e.clientX || e.clientY)) {
+        lastTipMouse.x = e.clientX; lastTipMouse.y = e.clientY;
+      } else {
+        const r = el.getBoundingClientRect();
+        lastTipMouse.x = r.left + r.width / 2;
+        lastTipMouse.y = r.top + r.height / 2;
+      }
+      // Unpurchasable states: just show the tooltip, skip the arm/confirm flow.
+      if (nodeState(id) !== 'available' || state.meta.schematics < nodeNextCost(id)) {
+        disarmNode(); renderRails(); renderTooltipFor(id); return;
+      }
+      if (armedNode === id) {
+        if (researchBuy(id)) { pulseNode(el); haptic(20); }
+        disarmNode();
+      } else {
+        armNode(id);
+        audio.researchArm();
+        haptic(4);
+      }
+      renderRails();
+      renderTooltipFor(id);
+    });
+    el.addEventListener('mouseenter', () => {
+      if (isSyntheticMouseFromTouch()) return;
+      const r = el.getBoundingClientRect();
+      lastTipMouse.x = r.left + r.width / 2;
+      lastTipMouse.y = r.top + r.height / 2;
+      renderTooltipFor(id);
+    });
+    el.addEventListener('mouseleave', () => {
+      if (isSyntheticMouseFromTouch()) return;
+      hideTooltip();
+    });
+    el.addEventListener('mousemove', moveTooltip);
+
+    return el;
+  }
+
+  function renderRails() {
+    if (!dom.railNodes) return;
+
+    const branchOwned = {};
+
+    for (const id in dom.railNodes) {
+      const n = TREE_NODES[id];
+      const el = dom.railNodes[id];
+      const revealed = nodeRevealed(id);
+      // Keep the cell occupying its column even when unrevealed — preserves
+      // the visual rhythm of the rail — but hide the node itself.
+      el.style.visibility = revealed ? '' : 'hidden';
+
+      el.classList.remove('owned', 'available', 'locked', 'affordable', 'armed');
+      if (!revealed) continue;
+
+      const st = nodeState(id);
+      el.classList.add(st);
+      if (st === 'available' && state.meta.schematics >= nodeNextCost(id)) {
+        el.classList.add('affordable');
+      }
+      if (id === armedNode) el.classList.add('armed');
+
+      if (n.type === 'leveled') {
+        const lvlEl = el.querySelector('.rn-level');
+        if (lvlEl) {
+          const lvl = nodeLevel(id);
+          const max = nodeMax(id);
+          if (lvl <= 0) lvlEl.textContent = '';
+          else if (lvl >= max) lvlEl.textContent = `MAX ${lvl}/${max === 999 ? '∞' : max}`;
+          else lvlEl.textContent = `LV ${lvl}/${max === 999 ? '∞' : max}`;
+        }
+      }
+
+      const costEl = el.querySelector('.rn-cost');
+      if (costEl) {
+        if (st === 'owned') costEl.textContent = 'OWNED';
+        else if (st === 'locked') costEl.textContent = 'LOCKED';
+        else {
+          const c = nodeNextCost(id);
+          costEl.textContent = `${c}◆`;
+        }
+      }
+
+      if (nodeLevel(id) > 0) {
+        branchOwned[n.branch] = (branchOwned[n.branch] || 0) + 1;
+      }
+    }
+
+    BRANCH_DISPLAY_ORDER.forEach(branchId => {
+      const owned = branchOwned[branchId] || 0;
+      const prog = dom.railProgress[branchId];
+      if (prog) {
+        const b = prog.querySelector('[data-prog-owned]');
+        if (b) b.textContent = owned;
+        prog.classList.toggle('complete', owned >= RAILS_TIERS);
+      }
+      const fill = dom.railBackboneFills[branchId];
+      if (fill) {
+        // Backbone fill reaches the center of the last owned node.
+        const pct = owned === 0 ? 0 : ((owned - 0.5) / RAILS_TIERS) * 100;
+        fill.style.width = pct + '%';
+      }
+    });
+
+    // Origin row — big "click to begin" prompt before it's owned, compact
+    // "network active" marker after. Done here (not in the main loop) because
+    // origin isn't part of any branch and has its own copy in the DOM.
+    if (dom.railOriginRow) {
+      const originLvl = nodeLevel('origin');
+      const originEl = dom.railNodes['origin'];
+      if (originEl) {
+        originEl.classList.remove('owned', 'available', 'locked', 'affordable', 'armed');
+        if (originLvl > 0) {
+          originEl.classList.add('owned');
+        } else {
+          originEl.classList.add('available', 'affordable');
+        }
+        if (armedNode === 'origin') originEl.classList.add('armed');
+        const costEl = originEl.querySelector('.rn-cost');
+        if (costEl) costEl.textContent = originLvl > 0 ? 'ACTIVE' : 'FREE';
+      }
+      dom.railOriginRow.classList.toggle('seeded', originLvl > 0);
+      const labelEl = dom.railOriginRow.querySelector('[data-origin-label]');
+      const subEl = dom.railOriginRow.querySelector('[data-origin-sub]');
+      if (labelEl) labelEl.textContent = originLvl > 0 ? 'NETWORK SEEDED' : 'SEED THE RESEARCH NETWORK';
+      if (subEl) subEl.textContent = originLvl > 0
+        ? 'Research active. Spend schematics on any discipline below.'
+        : 'The tree unlocks from here. One free click to begin.';
+    }
+  }
+
+  function bindRailsInteractions() {
+    if (bindRailsInteractions.__bound) return;
+    bindRailsInteractions.__bound = true;
+    // Dismiss tooltip and disarm any pending confirm on any tap outside a node.
+    const dismissIfOutside = (e) => {
+      const t = e.target;
+      if (!t || typeof t.closest !== 'function') return;
+      if (t.closest('.rail-node') || t.closest('.tree-tooltip')) return;
+      if (treeTip && treeTip.style.display !== 'none') hideTooltip();
+      if (armedNode !== null) { disarmNode(); renderRails(); }
+    };
+    document.addEventListener('click', dismissIfOutside, true);
+    document.addEventListener('touchend', dismissIfOutside, true);
   }
 
   // ---------- TOOLTIP ----------
@@ -2882,185 +2939,6 @@
     return lines.join('<br>');
   }
 
-  // ---------- PAN / ZOOM ----------
-  const VIEWBOX_DEFAULT = { x: 0, y: 0, w: 1200, h: 1200 };
-  let viewBox = { ...VIEWBOX_DEFAULT };
-  function applyViewBox() { treeSvg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`); }
-  function zoomBy(factor, cx = 0.5, cy = 0.5) {
-    const newW = Math.max(400, Math.min(2400, viewBox.w * factor));
-    const newH = viewBox.h * (newW / viewBox.w);
-    viewBox.x += (viewBox.w - newW) * cx;
-    viewBox.y += (viewBox.h - newH) * cy;
-    viewBox.w = newW; viewBox.h = newH;
-    applyViewBox();
-  }
-  function resetView() {
-    viewBox = { ...VIEWBOX_DEFAULT };
-    applyViewBox();
-  }
-  let dragging = false, dragStart = null;
-  function bindTreeInteractions() {
-    // zoom buttons
-    document.querySelectorAll('.tree-zoom [data-zoom]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const mode = btn.dataset.zoom;
-        if (mode === 'in')    zoomBy(0.8);
-        if (mode === 'out')   zoomBy(1.25);
-        if (mode === 'reset') resetView();
-      });
-    });
-    // Attach the document-level tooltip dismissal exactly once (this function
-    // runs again on every buildTree() — e.g. after prestige — which would stack
-    // duplicate listeners otherwise).
-    if (!bindTreeInteractions.__docBound) {
-      bindTreeInteractions.__docBound = true;
-      // Final safety net: any click/tap in the document that didn't land on a
-      // tree-node (and isn't the tooltip itself) hides the tooltip. Catches
-      // edge cases where the canvas mousedown/touchend handlers missed it.
-      const dismissIfOutside = (e) => {
-        if (treeTip.style.display === 'none') return;
-        const t = e.target;
-        if (!t || typeof t.closest !== 'function') return;
-        if (t.closest('.tree-node') || t.closest('.tree-tooltip')) return;
-        hideTooltip();
-        if (armedNode !== null) { disarmNode(); renderTree(); }
-      };
-      document.addEventListener('click', dismissIfOutside, true);
-      document.addEventListener('touchend', dismissIfOutside, true);
-    }
-    treeCanvas.addEventListener('mousedown', (e) => {
-      if (e.target.closest('.tree-node')) return;
-      // Background click → dismiss any node tooltip and disarm any pending confirm
-      hideTooltip();
-      if (armedNode !== null) { disarmNode(); renderTree(); }
-      dragging = true;
-      dragStart = { x: e.clientX, y: e.clientY, vbx: viewBox.x, vby: viewBox.y };
-      treeCanvas.classList.add('dragging');
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const rect = treeCanvas.getBoundingClientRect();
-      const scale = viewBox.w / rect.width;
-      viewBox.x = dragStart.vbx - (e.clientX - dragStart.x) * scale;
-      viewBox.y = dragStart.vby - (e.clientY - dragStart.y) * scale;
-      applyViewBox();
-    });
-    window.addEventListener('mouseup', () => { dragging = false; treeCanvas.classList.remove('dragging'); });
-    treeCanvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const rect = treeCanvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) / rect.width;
-      const my = (e.clientY - rect.top) / rect.height;
-      const zoom = e.deltaY > 0 ? 1.1 : 0.9;
-      const newW = Math.max(400, Math.min(2000, viewBox.w * zoom));
-      const newH = viewBox.h * (newW / viewBox.w);
-      viewBox.x += (viewBox.w - newW) * mx;
-      viewBox.y += (viewBox.h - newH) * my;
-      viewBox.w = newW; viewBox.h = newH;
-      applyViewBox();
-    }, { passive: false });
-
-    // ---------- TOUCH: pan (1 finger) + pinch-zoom (2 fingers) ----------
-    // Stored per active pointer to compute distance deltas for pinch.
-    const activeTouches = new Map(); // id -> { x, y }
-    let touchPanStart = null;        // { x, y, vbx, vby }
-    let pinchStart = null;           // { dist, cx, cy, vbx, vby, vbw, vbh }
-    let touchMoved = false;
-
-    function touchCenter() {
-      let sx = 0, sy = 0, n = 0;
-      for (const p of activeTouches.values()) { sx += p.x; sy += p.y; n++; }
-      return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
-    }
-    function touchDistance() {
-      const pts = [...activeTouches.values()];
-      if (pts.length < 2) return 0;
-      const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
-      return Math.hypot(dx, dy);
-    }
-    treeCanvas.addEventListener('touchstart', (e) => {
-      // Let single-finger taps on nodes through; pan only on empty canvas.
-      // For 2-finger gestures we always take over so pinch works anywhere.
-      if (e.touches.length === 1 && e.target.closest('.tree-node')) return;
-      e.preventDefault();
-      activeTouches.clear();
-      for (const t of e.touches) activeTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
-      touchMoved = false;
-      if (activeTouches.size === 1) {
-        const p = activeTouches.values().next().value;
-        touchPanStart = { x: p.x, y: p.y, vbx: viewBox.x, vby: viewBox.y };
-        pinchStart = null;
-      } else if (activeTouches.size === 2) {
-        const c = touchCenter();
-        pinchStart = {
-          dist: touchDistance(),
-          cx: c.x, cy: c.y,
-          vbx: viewBox.x, vby: viewBox.y,
-          vbw: viewBox.w, vbh: viewBox.h,
-        };
-        touchPanStart = null;
-      }
-      treeCanvas.classList.add('dragging');
-    }, { passive: false });
-
-    treeCanvas.addEventListener('touchmove', (e) => {
-      if (!activeTouches.size) return;
-      e.preventDefault();
-      for (const t of e.touches) {
-        if (activeTouches.has(t.identifier)) activeTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
-      }
-      touchMoved = true;
-      const rect = treeCanvas.getBoundingClientRect();
-      if (activeTouches.size === 1 && touchPanStart) {
-        const p = activeTouches.values().next().value;
-        const scale = viewBox.w / rect.width;
-        viewBox.x = touchPanStart.vbx - (p.x - touchPanStart.x) * scale;
-        viewBox.y = touchPanStart.vby - (p.y - touchPanStart.y) * scale;
-        applyViewBox();
-      } else if (activeTouches.size >= 2 && pinchStart) {
-        const c = touchCenter();
-        const d = touchDistance();
-        if (!d || !pinchStart.dist) return;
-        const zoomFactor = pinchStart.dist / d;
-        const newW = Math.max(400, Math.min(2400, pinchStart.vbw * zoomFactor));
-        const newH = pinchStart.vbh * (newW / pinchStart.vbw);
-        // anchor zoom on the initial pinch center (in canvas coords), then also apply center drift.
-        const ax = (pinchStart.cx - rect.left) / rect.width;
-        const ay = (pinchStart.cy - rect.top) / rect.height;
-        const scale = pinchStart.vbw / rect.width;
-        const dxPx = c.x - pinchStart.cx;
-        const dyPx = c.y - pinchStart.cy;
-        viewBox.x = pinchStart.vbx + (pinchStart.vbw - newW) * ax - dxPx * scale;
-        viewBox.y = pinchStart.vby + (pinchStart.vbh - newH) * ay - dyPx * scale;
-        viewBox.w = newW; viewBox.h = newH;
-        applyViewBox();
-      }
-    }, { passive: false });
-
-    function endTouch(e) {
-      if (e && e.changedTouches) {
-        for (const t of e.changedTouches) activeTouches.delete(t.identifier);
-      }
-      if (activeTouches.size === 0) {
-        touchPanStart = null; pinchStart = null;
-        treeCanvas.classList.remove('dragging');
-        // Stationary tap on empty canvas → dismiss tooltip and disarm any pending confirm.
-        if (!touchMoved && e && e.target && !e.target.closest('.tree-node')) {
-          hideTooltip();
-          if (armedNode !== null) { disarmNode(); renderTree(); }
-        }
-      } else if (activeTouches.size === 1) {
-        // second finger lifted — reset to single-finger pan from current pos
-        const p = activeTouches.values().next().value;
-        touchPanStart = { x: p.x, y: p.y, vbx: viewBox.x, vby: viewBox.y };
-        pinchStart = null;
-      }
-    }
-    treeCanvas.addEventListener('touchend', endTouch, { passive: true });
-    treeCanvas.addEventListener('touchcancel', endTouch, { passive: true });
-  }
-
   // ---------- UNLOCK WATCHER ----------
   let prevUnlockSig = '';
   function checkUnlockChanges() {
@@ -3077,7 +2955,7 @@
   }
 
   function rebuildAll() {
-    buildResBar(); buildFactory(); buildSidebar(); buildTierUnlocksBar(); buildTree();
+    buildResBar(); buildFactory(); buildSidebar(); buildTierUnlocksBar(); buildRails();
     buildAchievementsView();
     tabTreeEl.classList.toggle('hidden', !treeTabVisible());
     tabStatsEl.classList.toggle('hidden', !statsTabVisible());
