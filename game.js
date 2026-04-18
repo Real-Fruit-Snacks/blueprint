@@ -2507,7 +2507,11 @@
   const TREE_RADII = { 0: 0, 1: 85, 2: 155, 3: 225, 4: 295, 5: 365, 6: 435, 7: 505, 8: 575 };
   function treePos(nodeId) {
     const n = TREE_NODES[nodeId];
-    const rad = n.pos.angle * Math.PI / 180;
+    // Per-ring zigzag: alternate each ring's angular offset so consecutive
+    // nodes in a branch don't sit on a straight spoke. Gives the circuit-
+    // trace routing real diagonal segments to work with instead of micro-Ls.
+    const zigzagDeg = n.pos.r === 0 ? 0 : (n.pos.r % 2 === 0 ? -7 : 7);
+    const rad = (n.pos.angle + zigzagDeg) * Math.PI / 180;
     const r = TREE_RADII[n.pos.r];
     return { x: TREE_CX + r * Math.sin(rad), y: TREE_CY - r * Math.cos(rad) };
   }
