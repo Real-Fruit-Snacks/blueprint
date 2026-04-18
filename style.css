@@ -520,93 +520,72 @@ body {
 .stats-block .r .v.hi { color: var(--accent); }
 .stats-block .r .v.ok { color: var(--ok); }
 
-/* ========== ACHIEVEMENTS (factory-view collapsible section) ========== */
-.ach-section {
-  margin-top: 18px;
-  border: 1px solid var(--line);
-  background: rgba(10, 42, 58, 0.5);
-  position: relative;
+/* ========== ACHIEVEMENTS TAB ========== */
+.achievements-view {
+  display: block !important;
+  overflow-y: auto;
+  padding: 28px 32px;
 }
-.ach-section::before {
-  content: ''; position: absolute; top: -4px; left: -4px;
-  width: 8px; height: 8px; background: var(--ok);
-  border: 1px solid var(--white);
+.achievements-view:not(.active) { display: none !important; }
+
+.achievements-body {
+  max-width: 1100px;
+  margin: 0 auto;
 }
-.ach-section-head {
-  width: 100%;
-  display: flex; align-items: center;
-  flex-wrap: nowrap;
-  gap: 10px;
-  padding: 12px 16px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid transparent;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  color: var(--text);
-  text-align: left;
-  transition: background 0.15s;
-  min-width: 0;
+
+.ach-page-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-bottom: 14px; margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.ach-section-head:hover {
-  background: rgba(74, 159, 207, 0.08);
-}
-.ach-section.expanded .ach-section-head {
-  border-bottom-color: var(--line-dim);
-}
-.ach-head-chevron {
-  color: var(--ok);
-  font-size: 12px;
-  width: 14px;
-  display: inline-block;
-  flex: 0 0 auto;
-  transition: color 0.12s;
-}
-.ach-head-title {
+.ach-page-title {
+  font-family: var(--font-ui);
   color: var(--white);
-  font-size: 12px;
-  letter-spacing: 3px;
-  font-weight: bold;
-  flex: 0 1 auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+  font-size: 16px; letter-spacing: 3px; font-weight: 300;
 }
-.ach-head-progress {
+.ach-page-stats {
+  display: flex; gap: 12px; align-items: center;
+  font-family: var(--font-mono);
+}
+.ach-page-progress {
   color: var(--accent);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  font-size: 18px;
   letter-spacing: 1.5px;
-  flex: 0 0 auto;
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
 }
-.ach-head-new {
+.ach-page-new {
   background: var(--warn);
   color: var(--bg);
   font-weight: bold;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1px;
-  padding: 2px 8px;
-  border-radius: 2px;
-  flex: 0 0 auto;
-  white-space: nowrap;
+  padding: 3px 10px;
   animation: ach-new-pulse 1.4s ease-in-out infinite;
 }
 @keyframes ach-new-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 126, 95, 0.6); }
   50%      { box-shadow: 0 0 0 6px rgba(255, 126, 95, 0); }
 }
-.ach-head-spacer { flex: 1 1 0; min-width: 0; }
-.ach-head-hint {
-  /* The chevron + hover cue already indicate click-to-expand. The hint
-     just crowded the row on narrow screens, so we hide it globally. */
-  display: none;
-}
 
-.ach-section-body {
-  padding: 16px;
+.ach-page-body { padding: 0; }
+
+/* Small "!" badge on the ACHIEVEMENTS tab itself */
+.tab .tab-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: var(--warn);
+  color: var(--bg);
+  font-weight: bold;
+  font-size: 9px;
+  letter-spacing: 0;
+  border-radius: 2px;
+  animation: ach-new-pulse 1.4s ease-in-out infinite;
 }
+.tab.on .tab-badge { /* keep badge visible against green highlight */ }
 
 .ach-group {
   margin-bottom: 18px;
@@ -2234,10 +2213,9 @@ body {
 
   /* ----- ACHIEVEMENTS ----- */
   .ach-grid { grid-template-columns: 1fr; }
-  .ach-section-head { gap: 8px; padding: 10px 12px; }
-  .ach-head-title { font-size: 11px; letter-spacing: 1.5px; }
-  .ach-head-progress { font-size: 10px; letter-spacing: 1px; }
-  .ach-head-new { font-size: 9px; padding: 2px 6px; }
+  .achievements-view { padding: 14px 10px; }
+  .ach-page-title { font-size: 13px; letter-spacing: 2px; }
+  .ach-page-progress { font-size: 14px; }
 
   /* ----- BOTTOM BAR ----- */
   .botbar {

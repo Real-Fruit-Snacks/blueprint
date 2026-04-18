@@ -1642,9 +1642,13 @@
   const tabStatsEl   = document.getElementById('tab-stats');
   const tabMasteryEl = document.getElementById('tab-mastery');
   const masteryBodyEl = document.getElementById('mastery-body');
+  const achievementsBodyEl = document.getElementById('achievements-body');
   const tierUnlocksBar = document.getElementById('tier-unlocks-bar');
   const slotTip     = document.getElementById('slot-tip');
   const statsBodyEl = document.getElementById('stats-body');
+  // Coarse pointer / no-hover devices: phones, tablets. Used to swap hover tooltips
+  // for long-press on machine slots so tapping to buy doesn't flash a tooltip every time.
+  const isTouchDevice = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
   const dom = { tiers: {}, mineCard: null, side: {}, treeNodes: {}, treeLines: [], treeLevelTexts: {}, tierUnlockBtns: {} };
 
   // ---------- TABS ----------
@@ -1654,6 +1658,7 @@
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
     if (name === 'stats') renderStats();
     if (name === 'mastery') renderMastery();
+    if (name === 'achievements') { prevAchSig = ''; renderAchievementsSection(); }
   }
   function bindTabs() {
     document.querySelectorAll('.tab').forEach(t => {
@@ -1840,6 +1845,7 @@
           <div class="cost" data-cost></div>
         `;
         slot.addEventListener('click', (e) => {
+          if (slot.__suppressNextClick) { slot.__suppressNextClick = false; return; }
           if (!machineUnlocked(id)) return;
           const r = rm();
           // Modifiers override current buy-mode (quick one-off)
@@ -1866,9 +1872,46 @@
             state.settings.autoBuy[id] = !state.settings.autoBuy[id];
           });
         }
-        slot.addEventListener('mouseenter', (e) => showSlotTip(id, e));
-        slot.addEventListener('mousemove', moveSlotTip);
-        slot.addEventListener('mouseleave', hideSlotTip);
+        if (!isTouchDevice) {
+          slot.addEventListener('mouseenter', (e) => showSlotTip(id, e));
+          slot.addEventListener('mousemove', moveSlotTip);
+          slot.addEventListener('mouseleave', hideSlotTip);
+        } else {
+          // Touch devices: long-press (500ms) reveals the machine details instead of
+          // showing a hover tooltip on every tap (which fired after every buy).
+          let pressTimer = null, longPressed = false, pressX = 0, pressY = 0;
+          slot.addEventListener('touchstart', (e) => {
+            const t = e.touches && e.touches[0];
+            if (!t) return;
+            pressX = t.clientX; pressY = t.clientY;
+            longPressed = false;
+            pressTimer = setTimeout(() => {
+              longPressed = true;
+              pressTimer = null;
+              showSlotTip(id, { clientX: pressX, clientY: pressY });
+              haptic(20);
+            }, 450);
+          }, { passive: true });
+          slot.addEventListener('touchmove', (e) => {
+            const t = e.touches && e.touches[0];
+            if (!t || !pressTimer) return;
+            if (Math.hypot(t.clientX - pressX, t.clientY - pressY) > 10) {
+              clearTimeout(pressTimer); pressTimer = null;
+            }
+          }, { passive: true });
+          slot.addEventListener('touchend', (e) => {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+            if (longPressed) {
+              // Suppress the synthetic click that would otherwise buy after a long-press.
+              e.preventDefault && e.preventDefault();
+              slot.__suppressNextClick = true;
+              setTimeout(() => hideSlotTip(), 2500);
+            }
+          });
+          slot.addEventListener('touchcancel', () => {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+          }, { passive: true });
+        }
         slotsEl.appendChild(slot);
       }
 
@@ -1876,34 +1919,27 @@
       dom.tiers[tier.id] = row;
     });
 
-    // ACHIEVEMENTS SECTION (below all tiers, inside scroll wrapper)
-    const achSection = document.createElement('div');
-    achSection.className = 'ach-section';
-    achSection.innerHTML = `
-      <button class="ach-section-head" data-ach-toggle>
-        <span class="ach-head-chevron" data-ach-chev>▸</span>
-        <span class="ach-head-title">ACHIEVEMENTS</span>
-        <span class="ach-head-progress" data-ach-progress>0 / 0</span>
-        <span class="ach-head-new" data-ach-new-badge style="display:none">!</span>
-        <span class="ach-head-spacer"></span>
-        <span class="ach-head-hint" data-ach-expand-hint>click to expand</span>
-      </button>
-      <div class="ach-section-body" data-ach-body style="display:none"></div>
+    // Achievements now live on their own tab — no inline section in the factory view.
+  }
+
+  // ACHIEVEMENTS VIEW — rendered into #achievements-body, wired once at startup.
+  function buildAchievementsView() {
+    if (!achievementsBodyEl || dom.achBody) return; // already wired
+    achievementsBodyEl.innerHTML = `
+      <div class="ach-page-header">
+        <div class="ach-page-title">ACHIEVEMENTS</div>
+        <div class="ach-page-stats">
+          <span class="ach-page-progress" data-ach-progress>0 / 0</span>
+          <span class="ach-page-new" data-ach-new-badge style="display:none">!</span>
+        </div>
+      </div>
+      <div class="ach-page-body" data-ach-body></div>
     `;
-    scrollEl.appendChild(achSection);
-    dom.achSection = achSection;
-    dom.achHead = achSection.querySelector('[data-ach-toggle]');
-    dom.achChev = achSection.querySelector('[data-ach-chev]');
-    dom.achProgress = achSection.querySelector('[data-ach-progress]');
-    dom.achNewBadge = achSection.querySelector('[data-ach-new-badge]');
-    dom.achExpandHint = achSection.querySelector('[data-ach-expand-hint]');
-    dom.achBody = achSection.querySelector('[data-ach-body]');
-    dom.achHead.addEventListener('click', () => {
-      state.settings.achievementsExpanded = !state.settings.achievementsExpanded;
-      prevAchSig = '';
-      renderAchievementsSection();
-    });
-    // Event delegation — dismiss any earned+new card on click. Survives inner innerHTML rebuilds.
+    dom.achProgress  = achievementsBodyEl.querySelector('[data-ach-progress]');
+    dom.achNewBadge  = achievementsBodyEl.querySelector('[data-ach-new-badge]');
+    dom.achBody      = achievementsBodyEl.querySelector('[data-ach-body]');
+    dom.achTabBadge  = document.getElementById('ach-tab-badge');
+    // Event delegation — dismiss any earned+new card on tap. Survives inner innerHTML rebuilds.
     dom.achBody.addEventListener('click', (e) => {
       const card = e.target.closest('.ach.earned.new');
       if (!card || !card.dataset.achId) return;
@@ -1911,7 +1947,7 @@
       prevAchSig = '';
       renderAchievementsSection();
     });
-    prevAchSig = ''; // force achievements body to repopulate after rebuildAll
+    prevAchSig = '';
   }
   function pulse(el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
   // Haptic feedback — no-op on non-touch devices. Honors state.settings.haptics.
@@ -2010,23 +2046,22 @@
   let prevAchSig = '';
   function renderAchievementsSection() {
     if (!dom.achBody) return;
-    const expanded = !!state.settings.achievementsExpanded;
     const achMap = state.meta.achievements || {};
     const newMap = state.meta.newAchievements || {};
     let earned = 0, total = 0;
     for (const id in ACHIEVEMENTS) { total++; if (achMap[id]) earned++; }
 
-    // header updates — cheap, always run
-    dom.achProgress.textContent = `${earned} / ${total}`;
+    // Header + tab badge updates — cheap, always run
+    if (dom.achProgress) dom.achProgress.textContent = `${earned} / ${total}`;
     const newCount = Object.keys(newMap).length;
-    dom.achNewBadge.style.display = newCount > 0 ? '' : 'none';
-    dom.achNewBadge.textContent = newCount > 1 ? `! ${newCount}` : '!';
-    dom.achChev.textContent = expanded ? '▾' : '▸';
-    dom.achExpandHint.textContent = expanded ? 'click to collapse' : 'click to expand';
-    dom.achSection.classList.toggle('expanded', expanded);
-    dom.achBody.style.display = expanded ? '' : 'none';
-
-    if (!expanded) return;
+    if (dom.achNewBadge) {
+      dom.achNewBadge.style.display = newCount > 0 ? '' : 'none';
+      dom.achNewBadge.textContent = newCount > 1 ? `! ${newCount}` : '!';
+    }
+    if (dom.achTabBadge) {
+      dom.achTabBadge.style.display = newCount > 0 ? '' : 'none';
+      dom.achTabBadge.textContent = newCount > 1 ? newCount : '!';
+    }
 
     // Throttle innerHTML rebuild — only when earned set or new set changes.
     // (Rebuilding every frame kills click handlers between mousedown and mouseup.)
@@ -2079,7 +2114,6 @@
   // Cheap per-frame update for achievement progress bars (no DOM rebuild).
   function updateAchievementProgress() {
     if (!dom.achBody) return;
-    if (!state.settings.achievementsExpanded) return;
     const achMap = state.meta.achievements || {};
     dom.achBody.querySelectorAll('.ach[data-ach-id]').forEach(card => {
       const fillEl = card.querySelector('[data-ach-fill]');
@@ -2660,11 +2694,15 @@
       body += `<div class="srow"><span class="k">LOCKED</span><span class="v warn">Unlock ${m.mk.toUpperCase()} in Research</span></div>`;
     }
 
-    // hints for power users
+    // hints for power users — only on devices with real keyboard/mouse
     let hint = '';
-    if (rm().bulkBuy) hint += 'Shift+click: ×10 · Shift+Alt: ×100. ';
-    if (rm().maxBuy)  hint += 'Ctrl+Shift: ×1000. ';
-    if (rm().autoBuy) hint += 'Right-click: auto-buy toggle.';
+    if (!isTouchDevice) {
+      if (rm().bulkBuy) hint += 'Shift+click: ×10 · Shift+Alt: ×100. ';
+      if (rm().maxBuy)  hint += 'Ctrl+Shift: ×1000. ';
+      if (rm().autoBuy) hint += 'Right-click: auto-buy toggle.';
+    } else {
+      if (rm().autoBuy) hint += 'Tap the "A" chip to toggle auto-buy.';
+    }
     if (hint) body += `<div class="stip-hint">${hint}</div>`;
 
     slotTip.innerHTML = `<div class="stn">${m.name}</div>${body}`;
@@ -2863,6 +2901,7 @@
 
   function rebuildAll() {
     buildResBar(); buildFactory(); buildSidebar(); buildTierUnlocksBar(); buildTree();
+    buildAchievementsView();
     tabTreeEl.classList.toggle('hidden', !treeTabVisible());
     tabStatsEl.classList.toggle('hidden', !statsTabVisible());
     tabMasteryEl.classList.toggle('hidden', !masteryTabVisible());
