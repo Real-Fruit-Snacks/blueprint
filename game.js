@@ -643,6 +643,72 @@
     power:      '<polygon class="glyph" points="-2,-6 2,-6 -1,0 3,0 -2,6 1,1 -3,1"/>',
   };
 
+  // Per-node glyphs — hand-crafted so each research node reads as distinct
+  // instead of all nodes in a branch wearing the same icon. Falls back to
+  // BRANCH_GLYPHS if an id isn't here. Shapes use viewBox -10..10 with class
+  // "glyph" to pick up the branch-colour fill.
+  const NODE_GLYPHS = {
+    // SPEED — angular / dynamic shapes
+    speed_1:          '<polygon class="glyph" points="-3,-5 -3,5 5,0"/>',
+    momentum:         '<polygon class="glyph" points="-5,3 -2,-3 2,-3 5,3"/>',
+    speed_2:          '<polygon class="glyph" points="-6,-4 -2,0 -6,4 -3,4 1,0 -3,-4"/><polygon class="glyph" points="-1,-4 3,0 -1,4 2,4 6,0 2,-4"/>',
+    catalyst:         '<polygon class="glyph" points="0,-6 2,-2 6,0 2,2 0,6 -2,2 -6,0 -2,-2"/>',
+    speed_3:          '<circle class="glyph" cx="0" cy="0" r="5.5"/><circle cx="0" cy="0" r="2.5" fill="var(--bg-deep)"/><line x1="0" y1="0" x2="0" y2="-3" stroke="var(--bg-deep)" stroke-width="1"/>',
+    apex:             '<polygon class="glyph" points="-6,5 0,-5 6,5 3,5 0,-1 -3,5"/>',
+    infinity:         '<circle class="glyph" cx="-2.8" cy="0" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle class="glyph" cx="2.8" cy="0" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+    perpetual_motion: '<polygon class="glyph" points="0,-6 5,-3 5,3 0,6 -5,3 -5,-3"/><circle cx="0" cy="0" r="1.5" fill="var(--bg-deep)"/>',
+
+    // LOGISTICS — hand / click / strike shapes
+    heavy_hands:      '<rect class="glyph" x="-4" y="-2" width="8" height="6"/><rect class="glyph" x="-3" y="-5" width="6" height="3"/>',
+    auto_click:       '<polygon class="glyph" points="-3,-4 5,0 0,1 3,6 1,6 -2,2 -3,3"/>',
+    click_speed:      '<polygon class="glyph" points="-6,-4 -2,0 -6,4 -4,4 0,0 -4,-4"/><polygon class="glyph" points="-1,-4 3,0 -1,4 1,4 5,0 1,-4"/>',
+    click_power:      '<polygon class="glyph" points="-2,-6 2,-6 -1,0 3,0 -2,6 -1,1 -4,1"/>',
+    critical:         '<polygon class="glyph" points="0,-6 1.6,-1.6 6,-1.6 2.4,1 3.6,6 0,3 -3.6,6 -2.4,1 -6,-1.6 -1.6,-1.6"/>',
+    double_click:     '<circle class="glyph" cx="-2.5" cy="0" r="2.8"/><circle class="glyph" cx="3" cy="0" r="2.2"/>',
+    transcend:        '<polygon class="glyph" points="0,-6 5,-1 2.5,-1 2.5,6 -2.5,6 -2.5,-1 -5,-1"/>',
+    crit_cascade:     '<polygon class="glyph" points="-3,-6 1,-2 -2,-2 2,2 -1,2 3,6 -1,2 1,0 -3,-1"/>',
+
+    // YIELD — resource blocks / diamonds
+    yield_1:          '<polygon class="glyph" points="-5,-3 5,-3 6,0 5,3 -5,3 -6,0"/>',
+    double_pay:       '<polygon class="glyph" points="-5,0 -2,-4 1,0 -2,4"/><polygon class="glyph" points="1,-1 3.5,-4 6,-1 3.5,2"/>',
+    yield_2:          '<polygon class="glyph" points="-5,4 -3,-4 3,-4 5,4"/>',
+    yield_3:          '<polygon class="glyph" points="-3,-6 3,-6 6,-3 6,3 3,6 -3,6 -6,3 -6,-3"/><circle cx="0" cy="0" r="2" fill="var(--bg-deep)"/>',
+    triple_pay:       '<polygon class="glyph" points="-6,0 -4,-2 -2,0 -4,2"/><polygon class="glyph" points="-1,-1 1,-3 3,-1 1,1"/><polygon class="glyph" points="2,0 4,-2 6,0 4,2"/>',
+    yield_4:          '<path class="glyph" d="M -6 -2 L -2 -2 L -2 -5 L 2 -5 L 2 2 L 6 2 L 6 5"  fill="none" stroke="currentColor" stroke-width="1.4"/><circle class="glyph" cx="-6" cy="-2" r="1.2"/><circle class="glyph" cx="6" cy="5" r="1.2"/>',
+    abundance:        '<polygon class="glyph" points="0,-6 4,-2 6,0 4,2 0,6 -4,2 -6,0 -4,-2"/>',
+    golden_tick:      '<polygon class="glyph" points="0,-6 1.2,-1.2 6,0 1.2,1.2 0,6 -1.2,1.2 -6,0 -1.2,-1.2"/>',
+
+    // AUTOMATION — machinery / boxes
+    auto_1:           '<rect class="glyph" x="-5" y="-4" width="10" height="8"/><rect x="-3" y="-0.8" width="6" height="1.6" fill="var(--bg-deep)"/>',
+    bulk_buy:         '<rect class="glyph" x="-6" y="-1" width="6" height="6"/><rect class="glyph" x="0" y="-5" width="6" height="6"/>',
+    auto_2:           '<polygon class="glyph" points="-6,-4 6,-4 3,0 6,4 -6,4 -3,0"/>',
+    auto_buy:         '<circle class="glyph" cx="0" cy="0" r="5"/><circle cx="0" cy="0" r="2.2" fill="var(--bg-deep)"/><rect x="-1" y="-6" width="2" height="1.6" class="glyph"/><rect x="-1" y="4.4" width="2" height="1.6" class="glyph"/>',
+    auto_3:           '<rect class="glyph" x="-6" y="-5" width="3" height="10"/><rect class="glyph" x="-1.5" y="-5" width="3" height="10"/><rect class="glyph" x="3" y="-5" width="3" height="10"/>',
+    max_buy:          '<polygon class="glyph" points="-6,-4 -3,-4 0,0 3,-4 6,-4 6,4 3,4 3,-1 0,3 -3,-1 -3,4 -6,4"/>',
+    miniaturization:  '<rect class="glyph" x="-6" y="-6" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1"/><rect class="glyph" x="-2.5" y="-2.5" width="5" height="5"/>',
+    blueprint_memory: '<rect class="glyph" x="-5" y="-6" width="10" height="12"/><line x1="-5" y1="-2" x2="5" y2="-2" stroke="var(--bg-deep)" stroke-width="1"/><line x1="-5" y1="2" x2="5" y2="2" stroke="var(--bg-deep)" stroke-width="1"/>',
+
+    // EFFICIENCY — loops / leaves / compression
+    eff_1:            '<polygon class="glyph" points="0,-6 6,0 0,6 -6,0"/><polygon points="-2.5,0 0,-2.5 2.5,0 0,2.5" fill="var(--bg-deep)"/>',
+    lossless:         '<polygon class="glyph" points="-5,-5 5,-5 5,1 0,6 -5,1"/>',
+    eff_2:            '<polygon class="glyph" points="-6,-4 6,-4 1.5,0 6,4 -6,4 -1.5,0"/>',
+    recycling:        '<polygon class="glyph" points="0,-6 6,4 -6,4"/><polygon points="-2.5,-1.5 2.5,-1.5 0,2.5" fill="var(--bg-deep)"/>',
+    eff_3:            '<rect class="glyph" x="-6" y="-2" width="12" height="4"/><rect class="glyph" x="-4" y="-5" width="8" height="1.5"/><rect class="glyph" x="-4" y="3.5" width="8" height="1.5"/>',
+    zero_waste:       '<circle class="glyph" cx="0" cy="0" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="-4" y1="-4" x2="4" y2="4" stroke="currentColor" stroke-width="1.8"/>',
+    perfection:       '<polygon class="glyph" points="-6,5 -4,-3 0,2 4,-3 6,5"/>',
+    chain_reaction:   '<circle class="glyph" cx="-2.5" cy="0" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle class="glyph" cx="2.5" cy="0" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+
+    // POWER — numerals / bolts / batteries
+    mk4:              '<rect class="glyph" x="-5" y="-5" width="2" height="10"/><polygon class="glyph" points="-1.5,-5 0.5,-5 2.5,5 0.5,5"/><rect class="glyph" x="3" y="-5" width="2" height="10"/>',
+    overdrive_1:      '<polygon class="glyph" points="-2,-6 2,-6 0,0 3,0 -1,6 0,1 -2,1"/>',
+    mk5:              '<polygon class="glyph" points="-5,-5 -3,-5 0,3 3,-5 5,-5 1.5,5 -1.5,5"/>',
+    overdrive_2:      '<polygon class="glyph" points="-6,-6 -2,-6 -4,0 -1,0 -5,6 -4,1 -6,1"/><polygon class="glyph" points="1,-6 5,-6 3,0 6,0 2,6 3,1 1,1"/>',
+    power_surge:      '<polygon class="glyph" points="-3,-6 3,-6 1,-1 4,-1 0,6 -4,-1 -1,-1"/>',
+    power_cell:       '<rect class="glyph" x="-5" y="-3" width="8" height="6"/><rect class="glyph" x="3" y="-1.5" width="2" height="3"/>',
+    unity:            '<circle class="glyph" cx="0" cy="0" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle class="glyph" cx="0" cy="0" r="1.5"/>',
+    symbiosis:        '<polygon class="glyph" points="-6,0 0,-6 6,0 0,6"/><polygon points="-2.5,0 0,-2.5 2.5,0 0,2.5" fill="var(--bg-deep)"/>',
+  };
+
   // ---------- STATE ----------
   function emptyResources() { return { ore: 0, ingot: 0, part: 0, circuit: 0, core: 0, prototype: 0 }; }
   function emptyMachines()  { return Object.fromEntries(Object.keys(MACHINES).map(k => [k, 0])); }
@@ -2616,6 +2682,7 @@
         cell.dataset.ring = r;
         const entry = byBranch[branchId].find(e => e.r === r);
         if (entry) {
+          cell.classList.add('has-node');
           const node = buildRailNode(entry.id, branchId);
           cell.appendChild(node);
           dom.railNodes[entry.id] = node;
@@ -2651,7 +2718,16 @@
 
     const circle = document.createElement('div');
     circle.className = 'rn-circle';
-    circle.innerHTML = `<svg viewBox="-10 -10 20 20" class="rn-glyph">${BRANCH_GLYPHS[n.branch] || ''}</svg>`;
+    // Progress ring for leveled nodes: SVG arc that fills as the player
+    // levels up. Radius 15.5 on a viewBox of 20 so the stroke sits just
+    // inside the 32px circle border. stroke-dasharray is set at render.
+    const ringSvg = n.type === 'leveled'
+      ? `<svg class="rn-progress" viewBox="-20 -20 40 40"><circle class="rn-progress-arc" cx="0" cy="0" r="17"/></svg>`
+      : '';
+    const burst = `<div class="rn-burst"></div>`;
+    const glyph = `<svg viewBox="-10 -10 20 20" class="rn-glyph">${(NODE_GLYPHS[id] || BRANCH_GLYPHS[n.branch] || '')}</svg>`;
+    const check = `<div class="rn-check" aria-hidden="true"></div>`;
+    circle.innerHTML = ringSvg + glyph + check + burst;
     el.appendChild(circle);
 
     // Level + cost wrap as one block under the circle. The node uses a
@@ -2725,7 +2801,10 @@
 
     const circle = document.createElement('div');
     circle.className = 'rn-circle';
-    circle.innerHTML = `<span class="rn-tier">T${tid}</span>`;
+    circle.innerHTML =
+      `<span class="rn-tier">T${tid}</span>` +
+      `<div class="rn-check" aria-hidden="true"></div>` +
+      `<div class="rn-burst"></div>`;
     el.appendChild(circle);
 
     // Match the research-node sub-wrap layout so tier nodes align on the
@@ -2784,13 +2863,21 @@
       if (id === armedNode) el.classList.add('armed');
 
       if (n.type === 'leveled') {
+        const lvl = nodeLevel(id);
+        const max = nodeMax(id);
         const lvlEl = el.querySelector('.rn-level');
         if (lvlEl) {
-          const lvl = nodeLevel(id);
-          const max = nodeMax(id);
           if (lvl <= 0) lvlEl.textContent = '';
           else if (lvl >= max) lvlEl.textContent = `MAX ${lvl}/${max === 999 ? '∞' : max}`;
           else lvlEl.textContent = `LV ${lvl}/${max === 999 ? '∞' : max}`;
+        }
+        // Progress arc: stroke-dasharray is "<filled> <rest>" of the full
+        // circumference. Circle r=17 → circumference ~106.8.
+        const arc = el.querySelector('.rn-progress-arc');
+        if (arc) {
+          const C = 2 * Math.PI * 17;
+          const pct = max > 0 ? Math.min(1, lvl / max) : 0;
+          arc.setAttribute('stroke-dasharray', `${pct * C} ${C}`);
         }
       }
 

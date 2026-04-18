@@ -1642,18 +1642,26 @@ body {
   min-height: 80px;
 }
 
-/* Backbone = dashed horizontal line across the whole track at vertical center.
-   The "fill" is a solid colored portion that extends up to the last owned node. */
+/* Backbone — dashed horizontal line across the whole track. Base stroke is
+   tinted in the branch colour (dim) so the whole rail reads as "this line
+   belongs to Speed / Logistics / …" at a glance. The fill on top brightens
+   up to the last owned node. */
 .rail-backbone {
   position: absolute;
   left: 0;
   right: 0;
   top: 50%;
   height: 1px;
-  background-image: linear-gradient(to right, var(--line-dim) 50%, transparent 50%);
+  pointer-events: none;
+}
+.rail-backbone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to right, var(--branch-color, var(--line-dim)) 50%, transparent 50%);
   background-size: 6px 1px;
   background-repeat: repeat-x;
-  pointer-events: none;
+  opacity: 0.22;
 }
 .rail-backbone-fill {
   position: absolute;
@@ -1662,9 +1670,10 @@ body {
   height: 100%;
   width: 0%;
   background: var(--branch-color, var(--text));
-  opacity: 0.75;
+  opacity: 0.9;
   box-shadow: 0 0 6px var(--branch-color, transparent);
   transition: width 0.3s ease-out;
+  z-index: 1;
 }
 
 .rail-cell {
@@ -1673,6 +1682,30 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 2;
+}
+/* Anchor tick — a short bright bar behind each node circle, branch-coloured,
+   so the node reads as "soldered to the backbone" rather than floating on a
+   dashed line. Hidden on locked / unrevealed cells to avoid teasing rings
+   the player can't interact with. */
+.rail-cell.has-node::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 2px;
+  background: var(--branch-color, var(--line));
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 1px;
+}
+.rail-cell.has-node:has(.rail-node.locked)::before {
+  opacity: 0;
+}
+.rail-cell.has-node:has(.rail-node.owned)::before {
+  opacity: 0.85;
 }
 
 /* The node itself — name above the circle, sub-block (level + cost) below.
@@ -1696,6 +1729,12 @@ body {
 .rail-node:hover {
   transform: translateY(-1px);
 }
+.rail-node:not(.locked):hover .rn-circle {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.06),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+    0 0 12px color-mix(in srgb, var(--branch-color) 60%, transparent);
+}
 .rail-node .rn-name {
   grid-row: 1;
   align-self: end;
@@ -1713,12 +1752,19 @@ body {
   height: 32px;
   border-radius: 50%;
   border: 1.5px solid var(--branch-color);
-  background: var(--bg-dim);
+  /* Subtle depth — inner radial gradient highlighted at the top-left,
+     plus inset shadows for a concave button look. */
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.10), transparent 55%),
+    linear-gradient(180deg, var(--bg-dim) 0%, var(--bg-deep) 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.06),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  transition: border-width 0.12s, box-shadow 0.2s, background 0.12s;
+  transition: border-width 0.12s, box-shadow 0.2s, background 0.12s, transform 0.12s;
   flex-shrink: 0;
 }
 .rail-node .rn-circle::before {
@@ -1732,20 +1778,99 @@ body {
   pointer-events: none;
 }
 .rail-node .rn-glyph {
+  position: relative;
   width: 14px;
   height: 14px;
   pointer-events: none;
+  color: var(--branch-color);
+  z-index: 2;
 }
 .rail-node .rn-glyph .glyph {
-  fill: var(--branch-color);
+  fill: currentColor;
 }
+
+/* Progress ring — SVG circle stroked around the node to show level/max.
+   Only rendered for leveled nodes; rotated -90deg so the arc starts at 12. */
+.rail-node .rn-progress {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  pointer-events: none;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.rail-node .rn-progress-arc {
+  fill: none;
+  stroke: var(--branch-color);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 0 1000;
+  transition: stroke-dasharray 0.35s ease-out, stroke 0.12s;
+  opacity: 0.85;
+}
+.rail-node.owned .rn-progress-arc { stroke: var(--ok); opacity: 1; }
+.rail-node.locked .rn-progress-arc { opacity: 0; }
+
+/* Owned check — small badge in the corner of the circle once a node is
+   fully owned / maxed. Clearer than a pure colour swap. */
+.rail-node .rn-check {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ok);
+  border: 1.5px solid var(--bg-deep);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s, transform 0.2s;
+  pointer-events: none;
+  z-index: 3;
+}
+.rail-node .rn-check::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  width: 3px;
+  height: 5px;
+  border-right: 1.5px solid var(--bg-deep);
+  border-bottom: 1.5px solid var(--bg-deep);
+  transform: rotate(45deg);
+}
+.rail-node.owned .rn-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Purchase burst — an expanding ring that fades out on confirm. Distinct
+   element (not ::before which is the inner ring) so both can coexist. */
+.rail-node .rn-burst {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--branch-color);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1);
+}
+.rail-node.pulse .rn-burst {
+  animation: rn-burst 0.6s cubic-bezier(0.2, 0.6, 0.3, 1);
+}
+@keyframes rn-burst {
+  0%   { transform: scale(1);    opacity: 0.9; }
+  100% { transform: scale(2.4);  opacity: 0;   }
+}
+
 .rail-node .rn-sub {
   grid-row: 3;
   align-self: start;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   text-align: center;
 }
 .rail-node .rn-level {
@@ -1756,32 +1881,60 @@ body {
   font-family: var(--font-mono);
   min-height: 9px;
 }
+/* Cost badge — frame the cost in a small pill so it reads as a data stamp
+   rather than floating text. Empty strings collapse so locked/unrevealed
+   nodes don't show an empty pill. */
 .rail-node .rn-cost {
   font-size: 8px;
   letter-spacing: 0.5px;
   color: var(--text-dim);
   font-family: var(--font-mono);
   min-height: 9px;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: rgba(10, 42, 58, 0.4);
+  line-height: 1;
+}
+.rail-node .rn-cost:empty {
+  border: none;
+  background: transparent;
+  padding: 0;
+  min-height: 9px;
 }
 
 /* ---- State styles ---- */
 .rail-node.available .rn-circle      { border-color: var(--branch-color); }
 .rail-node.available .rn-name        { color: var(--branch-color); }
-.rail-node.available .rn-cost        { color: var(--accent); }
+.rail-node.available .rn-cost        { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 
-.rail-node.owned .rn-circle          { border-color: var(--ok); background: rgba(120, 224, 143, 0.08); }
+.rail-node.owned .rn-circle          {
+  border-color: var(--ok);
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.10), transparent 55%),
+    linear-gradient(180deg, rgba(120, 224, 143, 0.15) 0%, rgba(120, 224, 143, 0.04) 100%);
+}
 .rail-node.owned .rn-circle::before  { border-color: var(--ok); }
-.rail-node.owned .rn-glyph .glyph    { fill: var(--ok); }
+.rail-node.owned .rn-glyph           { color: var(--ok); }
 .rail-node.owned .rn-name            { color: var(--ok); }
-.rail-node.owned .rn-cost            { color: var(--ok); opacity: 0.8; }
+.rail-node.owned .rn-cost            {
+  color: var(--ok);
+  opacity: 0.85;
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
 .rail-node.owned .rn-level           { color: var(--ok); }
 
 .rail-node.locked                    { cursor: not-allowed; }
-.rail-node.locked .rn-circle         { border-style: dashed; border-color: var(--line-dim); opacity: 0.65; }
+.rail-node.locked .rn-circle         { border-style: dashed; border-color: var(--line-dim); opacity: 0.65; box-shadow: none; }
 .rail-node.locked .rn-circle::before { opacity: 0.15; }
-.rail-node.locked .rn-glyph .glyph   { fill: var(--text-ghost, var(--text-dim)); opacity: 0.55; }
+.rail-node.locked .rn-glyph          { color: var(--text-ghost, var(--text-dim)); opacity: 0.55; }
 .rail-node.locked .rn-name           { color: var(--text-dim); opacity: 0.6; }
-.rail-node.locked .rn-cost           { color: var(--text-dim); opacity: 0.5; }
+.rail-node.locked .rn-cost           {
+  color: var(--text-dim);
+  opacity: 0.5;
+  border-color: transparent;
+  background: transparent;
+}
 
 /* Affordable — static drop-shadow glow (blur radius does NOT animate — same
    lesson as before: animating blur chokes the GPU on mobile). */
