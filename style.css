@@ -1584,8 +1584,18 @@ body {
   overflow: hidden;
   cursor: grab;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255,214,112,0.06) 0%, transparent 40%),
+    /* Subtle vignette dimming the corners */
+    radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.35) 100%),
+    /* Soft golden core glow under the origin */
+    radial-gradient(circle at 50% 50%, rgba(255,214,112,0.10) 0%, transparent 22%),
+    /* Faint 'isometric' dot grid — gives the canvas a drafting feel */
+    radial-gradient(circle at 1px 1px, rgba(74,159,207,0.18) 0.8px, transparent 1.4px),
     var(--bg);
+  background-size:
+    100% 100%,
+    100% 100%,
+    24px 24px,
+    100% 100%;
 }
 
 .tree-zoom {
@@ -1635,6 +1645,26 @@ body {
   user-select: none;
 }
 
+/* schematic background guides drawn inside the SVG */
+.tree-bg-ring {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.8;
+  opacity: 0.32;
+  stroke-dasharray: 4 6;
+}
+.tree-bg-spoke {
+  stroke: var(--line);
+  stroke-width: 0.6;
+  opacity: 0.22;
+  stroke-dasharray: 2 6;
+}
+.tree-bg-corner {
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  opacity: 0.6;
+}
+
 /* connection lines */
 .tree-line {
   stroke: var(--line);
@@ -1678,6 +1708,33 @@ body {
 .tree-node.available .bg { stroke: var(--branch-color);  fill: var(--bg-dim); }
 .tree-node.locked    .bg { stroke: var(--line);          opacity: 0.55; }
 .tree-node.origin    .bg { stroke: var(--branch-color);  stroke-width: 2.5; fill: var(--bg-dim); }
+
+/* Inner schematic ring — sits just inside the main circle, faint by default
+   and tints to the branch / state color when the node is interactive. */
+.tree-node .inner-ring {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.6;
+  opacity: 0.35;
+  pointer-events: none;
+}
+.tree-node.owned     .inner-ring { stroke: var(--ok);           opacity: 0.6; }
+.tree-node.available .inner-ring { stroke: var(--branch-color); opacity: 0.55; }
+.tree-node.locked    .inner-ring { opacity: 0.18; }
+.tree-node.origin    .inner-ring { stroke: var(--branch-color); opacity: 0.7; }
+
+/* Cardinal ticks — tiny lines at compass points just outside the circle,
+   added only on origin + first-ring nodes (set via JS). */
+.tree-node .node-tick {
+  stroke: var(--line);
+  stroke-width: 1;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.tree-node.owned     .node-tick { stroke: var(--ok);           opacity: 0.85; }
+.tree-node.available .node-tick { stroke: var(--branch-color); opacity: 0.85; }
+.tree-node.locked    .node-tick { opacity: 0.25; }
+.tree-node.origin    .node-tick { stroke: var(--branch-color); opacity: 1; }
 
 .tree-node:hover .bg { stroke: var(--white); }
 

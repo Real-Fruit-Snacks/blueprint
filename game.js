@@ -2308,6 +2308,44 @@
 
   function buildTree() {
     treeSvg.innerHTML = '';
+
+    // BACKGROUND LAYER — schematic grid: concentric tier rings + radial spokes
+    // along each branch axis. Drawn first so everything else sits on top.
+    const bg = svgEl('g', { id: 'tree-bg' });
+    treeSvg.appendChild(bg);
+    // Cardinal/branch spokes
+    [0, 60, 120, 180, 240, 300].forEach(angle => {
+      const rad = angle * Math.PI / 180;
+      const r = TREE_RADII[8] + 30;
+      const x2 = TREE_CX + r * Math.sin(rad);
+      const y2 = TREE_CY - r * Math.cos(rad);
+      const line = svgEl('line', { x1: TREE_CX, y1: TREE_CY, x2, y2 });
+      line.classList.add('tree-bg-spoke');
+      bg.appendChild(line);
+    });
+    // Tier rings — one per ring radius the nodes occupy
+    [1, 2, 3, 4, 5, 6, 7, 8].forEach(ringIdx => {
+      const ring = svgEl('circle', { cx: TREE_CX, cy: TREE_CY, r: TREE_RADII[ringIdx] });
+      ring.classList.add('tree-bg-ring');
+      bg.appendChild(ring);
+    });
+    // Outer corner brackets — give the canvas an "engineering drawing" frame.
+    const cornerSize = 30;
+    const margin = TREE_RADII[8] + 20;
+    const corners = [
+      { x: TREE_CX - margin, y: TREE_CY - margin, dx: 1, dy: 1 },
+      { x: TREE_CX + margin, y: TREE_CY - margin, dx: -1, dy: 1 },
+      { x: TREE_CX - margin, y: TREE_CY + margin, dx: 1, dy: -1 },
+      { x: TREE_CX + margin, y: TREE_CY + margin, dx: -1, dy: -1 },
+    ];
+    corners.forEach(c => {
+      const h = svgEl('line', { x1: c.x, y1: c.y, x2: c.x + cornerSize * c.dx, y2: c.y });
+      const v = svgEl('line', { x1: c.x, y1: c.y, x2: c.x, y2: c.y + cornerSize * c.dy });
+      h.classList.add('tree-bg-corner');
+      v.classList.add('tree-bg-corner');
+      bg.appendChild(h); bg.appendChild(v);
+    });
+
     const g = svgEl('g', { id: 'tree-g' });
     treeSvg.appendChild(g);
 
@@ -2339,6 +2377,22 @@
       const bg = svgEl('circle', { cx: 0, cy: 0, r: radius });
       bg.classList.add('bg');
       grp.appendChild(bg);
+
+      // Inner ring + cardinal tick marks — schematic-component detail.
+      const innerRing = svgEl('circle', { cx: 0, cy: 0, r: radius - 4 });
+      innerRing.classList.add('inner-ring');
+      grp.appendChild(innerRing);
+      // 4 short cardinal ticks just outside the main circle (N/E/S/W) — only on
+      // larger nodes (origin + first ring) so smaller nodes don't get cluttered.
+      if (id === 'origin' || n.pos.r === 1) {
+        const tick = 4;
+        const r0 = radius + 1, r1 = radius + 1 + tick;
+        [[0,-1],[1,0],[0,1],[-1,0]].forEach(([dx, dy]) => {
+          const t = svgEl('line', { x1: dx*r0, y1: dy*r0, x2: dx*r1, y2: dy*r1 });
+          t.classList.add('node-tick');
+          grp.appendChild(t);
+        });
+      }
 
       const glyphWrap = svgEl('g');
       glyphWrap.innerHTML = BRANCH_GLYPHS[n.branch] || BRANCH_GLYPHS.origin;
