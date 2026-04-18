@@ -9,7 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="https://real-fruit-snacks.github.io/blueprint/"><img alt="Play in browser" src="https://img.shields.io/badge/%E2%96%B6%20Play%20in%20browser-ffd670?style=for-the-badge&labelColor=0d3b4f"></a>
+  <a href="https://westicles.itch.io/blueprint-an-incremental-factory"><img alt="Play on itch.io" src="https://img.shields.io/badge/%E2%96%B6%20Play%20on%20itch.io-fa5c5c?style=for-the-badge&labelColor=0d3b4f"></a>
+  &nbsp;
+  <a href="https://real-fruit-snacks.github.io/blueprint/"><img alt="Play on GitHub Pages" src="https://img.shields.io/badge/%E2%96%B6%20GitHub%20Pages-ffd670?style=for-the-badge&labelColor=0d3b4f"></a>
   &nbsp;
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-b0d0e4?style=for-the-badge&labelColor=0d3b4f"></a>
   &nbsp;
@@ -108,8 +110,9 @@ All desktop modifier shortcuts have on-screen equivalents — the **BUY MODE** b
 
 ## Play
 
-- ▶ **[Play on GitHub Pages](https://real-fruit-snacks.github.io/blueprint/)** — always the latest commit.
-- On iOS and Android you can also **Add to Home Screen** from the browser menu for an offline-capable standalone app.
+- ▶ **[Play on itch.io](https://westicles.itch.io/blueprint-an-incremental-factory)** — official release page with comments and updates.
+- ▶ **[Play on GitHub Pages](https://real-fruit-snacks.github.io/blueprint/)** — always the latest commit, plus installable as a PWA with offline play (the itch embed can't register a service worker).
+- On iOS and Android you can also **Add to Home Screen** from the GitHub Pages build for an offline-capable standalone app.
 
 ### Run locally
 
