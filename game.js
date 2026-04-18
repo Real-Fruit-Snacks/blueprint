@@ -3518,6 +3518,11 @@
         slot.addEventListener('click', (e) => {
           if (slot.__suppressNextClick) { slot.__suppressNextClick = false; return; }
           if (!machineUnlocked(id)) return;
+          // Once the user has clicked the slot, suppress the hover-info toast
+          // for this hover session — they know what the machine is. The toast
+          // feels cheap during spam-clicks of an unaffordable machine.
+          if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+          hoverSuppressed = true;
           const r = rm();
           // Modifiers override current buy-mode (quick one-off)
           let count = null;
@@ -3548,9 +3553,13 @@
         // Hover on desktop with a 500ms dwell before showing an info toast — so
         // flitting the mouse across rows doesn't spam the stack. Only one toast
         // per hover window; we track it so we can cancel if the user leaves early.
+        // hoverSuppressed flips on click and resets on mouseleave, so spam-clicks
+        // of an unaffordable slot don't get interrupted by the info toast.
         let hoverTimer = null;
+        let hoverSuppressed = false;
         slot.addEventListener('mouseenter', () => {
           if (isSyntheticMouseFromTouch()) return;
+          if (hoverSuppressed) return;
           hoverTimer = setTimeout(() => {
             hoverTimer = null;
             showToast(machineInfoHtml(id), { silent: true });
@@ -3558,6 +3567,7 @@
         });
         slot.addEventListener('mouseleave', () => {
           if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+          hoverSuppressed = false;
         });
 
         // Long-press on touch pops the same toast. Wired unconditionally —
