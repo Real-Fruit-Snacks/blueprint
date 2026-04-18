@@ -2740,7 +2740,13 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
 .modal-bg {
   position: fixed; inset: 0;
   background: rgba(10, 20, 30, 0.75);
-  display: flex; align-items: center; justify-content: center;
+  /* Backdrop owns the scroll — "safe center" falls back to top-align when the
+     modal is taller than the viewport, so the head of the modal stays reachable
+     (fixes mobile Safari clipping when browser chrome shrinks the visible area). */
+  display: flex; align-items: safe center; justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px 16px;
   z-index: 100;
 }
 .modal {
@@ -2749,6 +2755,7 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   padding: 24px;
   min-width: 420px;
   max-width: 640px;
+  margin: auto 0;
 }
 .modal h3 {
   font-size: 11px; letter-spacing: 3px; color: var(--ok);
@@ -3028,12 +3035,13 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   .ach-page-progress { font-size: 14px; }
 
   /* ----- MODALS ----- */
+  .modal-bg { padding: 12px; }
   .modal {
     min-width: 0;
-    max-width: calc(100vw - 24px);
+    max-width: 100%;
     padding: 16px;
-    max-height: calc(100vh - 48px);
-    overflow-y: auto;
+    /* No max-height / overflow-y here — .modal-bg owns the scroll now so mobile
+       Safari doesn't clip the modal's head/foot when the URL bar is visible. */
   }
 
   /* ----- TOASTS ----- */
