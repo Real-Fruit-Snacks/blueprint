@@ -2595,6 +2595,25 @@
         if (mode === 'reset') resetView();
       });
     });
+    // Attach the document-level tooltip dismissal exactly once (this function
+    // runs again on every buildTree() — e.g. after prestige — which would stack
+    // duplicate listeners otherwise).
+    if (!bindTreeInteractions.__docBound) {
+      bindTreeInteractions.__docBound = true;
+      // Final safety net: any click/tap in the document that didn't land on a
+      // tree-node (and isn't the tooltip itself) hides the tooltip. Catches
+      // edge cases where the canvas mousedown/touchend handlers missed it.
+      const dismissIfOutside = (e) => {
+        if (treeTip.style.display === 'none') return;
+        const t = e.target;
+        if (!t || typeof t.closest !== 'function') return;
+        if (t.closest('.tree-node') || t.closest('.tree-tooltip')) return;
+        hideTooltip();
+        if (armedNode !== null) { disarmNode(); renderTree(); }
+      };
+      document.addEventListener('click', dismissIfOutside, true);
+      document.addEventListener('touchend', dismissIfOutside, true);
+    }
     treeCanvas.addEventListener('mousedown', (e) => {
       if (e.target.closest('.tree-node')) return;
       // Background click → dismiss any node tooltip and disarm any pending confirm
@@ -3212,17 +3231,21 @@
       if (treePrestigeBtn) treePrestigeBtn.classList.toggle('dim', gain < 1);
     }
 
-    // Tab badge: schematic count if any to spend, else "!" when prestige would pay off
+    // Tab badge priority:
+    //   1. If a prestige is ready, show the gain ("+N") so the player can weigh it
+    //      from any screen without switching to the research tab
+    //   2. Otherwise, if they have unspent schematics, show that count
+    //   3. Otherwise, hide
     if (treeTabBadgeEl) {
       const schem = state.meta.schematics || 0;
-      if (schem > 0) {
+      if (canP && gain > 0) {
+        treeTabBadgeEl.style.display = '';
+        treeTabBadgeEl.textContent = '+' + fmt(gain);
+        treeTabBadgeEl.classList.remove('tab-badge-count');
+      } else if (schem > 0) {
         treeTabBadgeEl.style.display = '';
         treeTabBadgeEl.textContent = fmt(schem);
         treeTabBadgeEl.classList.add('tab-badge-count');
-      } else if (canP && gain > 0) {
-        treeTabBadgeEl.style.display = '';
-        treeTabBadgeEl.textContent = '!';
-        treeTabBadgeEl.classList.remove('tab-badge-count');
       } else {
         treeTabBadgeEl.style.display = 'none';
       }
