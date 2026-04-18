@@ -1983,17 +1983,15 @@
       const goal = recipe.goal;
       const progress = (state.meta.clickProgress && state.meta.clickProgress[res]) || 0;
 
-      // Description line
+      // Description line — short cost/yield hint. Details live in the progress bar + tooltips.
       const descEl = btn.querySelector('[data-mine-desc]');
       if (descEl) {
         if (goal === 1) {
-          descEl.textContent = `+${fmt(baseMul)} PER CLICK`;
+          descEl.textContent = `+${fmt(baseMul)}/CLICK`;
         } else {
-          // click-to-goal → how many clicks remaining at current baseMul
-          const clicksLeft = Math.max(1, Math.ceil((goal - progress) / Math.max(baseMul, 0.0001)));
-          descEl.textContent = `+${fmt(baseMul)}/click · -${inputCost} ${inRes} per ${res}`;
+          descEl.textContent = `-${inputCost} ${inRes.toUpperCase()}`;
           const progEl = btn.querySelector('[data-mine-prog]');
-          if (progEl) progEl.textContent = `${fmt(progress)} / ${goal} · ${clicksLeft} click${clicksLeft !== 1 ? 's' : ''} to +1`;
+          if (progEl) progEl.textContent = `${fmt(progress)} / ${goal}`;
         }
       }
       // Progress bar fill
