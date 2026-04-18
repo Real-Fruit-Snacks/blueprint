@@ -2720,7 +2720,9 @@
       if (consumeRatio > 0) {
         for (const res in m.consumes) {
           const consumeRate = m.consumes[res] * count * consumeRatio * consMul;
-          state.resources[res] -= consumeRate * dt;
+          // Floor at zero — consumeRatio clamps over-consumption but fp slop can still leave a
+          // tiny negative (e.g. -1e-13) that renders as "-0.0" in the top bar.
+          state.resources[res] = Math.max(0, (state.resources[res] || 0) - consumeRate * dt);
           runtime.consRate[res] = (runtime.consRate[res] || 0) + consumeRate;
         }
       }
