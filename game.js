@@ -3347,6 +3347,17 @@
   }
 
   // ---------- FACTORY ----------
+  // Drafting corner ticks — reused on tier rows and the mine block so each
+  // section reads as its own labelled schematic card.
+  function addCornerTicks(el) {
+    ['tl','tr','bl','br'].forEach(pos => {
+      const c = document.createElement('div');
+      c.className = `sheet-corner sheet-corner-${pos}`;
+      c.innerHTML = '<svg viewBox="0 0 20 20" width="18" height="18"><line x1="0" y1="0" x2="12" y2="0"/><line x1="0" y1="0" x2="0" y2="12"/></svg>';
+      el.appendChild(c);
+    });
+  }
+
   function buildFactory() {
     factoryEl.innerHTML = '';
     dom.tiers = {};
@@ -3380,19 +3391,44 @@
     factoryEl.appendChild(scrollEl);
     dom.factoryScroll = scrollEl;
 
+    // Mine block — wraps the mine-card as a "source" schematic panel with a
+    // labelled callout + drafting corners, so the page opens like an engineering sheet.
+    const mineBlock = document.createElement('div');
+    mineBlock.className = 'mine-block';
+    scrollEl.appendChild(mineBlock);
+    addCornerTicks(mineBlock);
+
+    const sourceLabel = document.createElement('div');
+    sourceLabel.className = 'source-label';
+    sourceLabel.innerHTML = `
+      <span class="sl-pip">◆ SOURCE</span>
+      <span class="sl-rule"></span>
+      <span class="sl-tag">MANUAL EXTRACTION</span>
+    `;
+    mineBlock.appendChild(sourceLabel);
+
     // Mine bar — one big clickable button per unlocked resource.
     // Populated/updated by renderMineBar() on each frame.
     const mineCard = document.createElement('div');
     mineCard.className = 'mine-card';
-    scrollEl.appendChild(mineCard);
+    mineBlock.appendChild(mineCard);
     dom.mineCard = mineCard;
     prevMineSig = ''; // force renderMineBar to repopulate the fresh empty container
 
-    TIERS.forEach((tier) => {
+    TIERS.forEach((tier, tierIdx) => {
       const unlocked = tierUnlocked(tier.id);
       const row = document.createElement('div');
       row.className = 'tier' + (unlocked ? '' : ' locked');
       row.dataset.tier = tier.id;
+
+      const appendFlowAfter = () => {
+        if (tierIdx < TIERS.length - 1) {
+          const flow = document.createElement('div');
+          flow.className = 'tier-flow';
+          flow.innerHTML = `<span class="tf-label">↓ ${tier.resource}</span>`;
+          scrollEl.appendChild(flow);
+        }
+      };
 
       if (!unlocked) {
         const canBuy = canBuyTierUnlock(tier.id);
@@ -3411,18 +3447,24 @@
         }
         row.innerHTML = `
           <div class="tier-head">
-            <b>T${tier.id} · ${tier.name}</b>
+            <span class="tier-pip locked">T${tier.id}</span>
+            <b>${tier.name}</b>
+            <span class="tier-rule"></span>
             <div class="unlock-hint">${hint}</div>
           </div>
         `;
         scrollEl.appendChild(row);
+        addCornerTicks(row);
         dom.tiers[tier.id] = row;
+        appendFlowAfter();
         return;
       }
 
       row.innerHTML = `
         <div class="tier-head">
-          <b>T${tier.id} · ${tier.name}</b>
+          <span class="tier-pip">T${tier.id}</span>
+          <b>${tier.name}</b>
+          <span class="tier-rule"></span>
           <div class="rate" data-rate>+0 ${tier.resource}/s</div>
         </div>
         <div class="slots"></div>
@@ -3532,7 +3574,9 @@
       }
 
       scrollEl.appendChild(row);
+      addCornerTicks(row);
       dom.tiers[tier.id] = row;
+      appendFlowAfter();
     });
 
     // Achievements now live on their own tab — no inline section in the factory view.
