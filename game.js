@@ -771,18 +771,18 @@
     };
   })();
 
-  // ---------- TIPS / HINTS (routed to sidebar Tips log) ----------
-  function stripTags(html) { return html.replace(/<[^>]+>/g, ''); }
+  // ---------- TIPS / HINTS (routed to toast popups) ----------
   function toast(html, opts = {}) {
     if (state.settings && state.settings.tipsMuted) return;
-    log(stripTags(html));
+    // showToast might not exist yet during early boot — fall back to console in that window.
+    if (typeof showToast === 'function') showToast(html, opts);
   }
   function hint(id, html) {
     if (!state.settings.hintsShown) state.settings.hintsShown = {};
     if (state.settings.hintsShown[id]) return;
     state.settings.hintsShown[id] = true;
     if (state.settings && state.settings.tipsMuted) return;
-    log(stripTags(html));
+    if (typeof showToast === 'function') showToast(html, { duration: 6000 });
   }
 
   // ---------- FORMATTERS ----------
@@ -816,11 +816,10 @@
     return h + 'h ago';
   }
 
-  // ---------- LOG ----------
+  // ---------- LOG (routes to toast popups) ----------
   function log(text) {
-    state.log = state.log || [];
-    state.log.unshift({ t: Date.now(), text });
-    if (state.log.length > LOG_MAX) state.log.length = LOG_MAX;
+    if (state.settings && state.settings.tipsMuted) return;
+    if (typeof showToast === 'function') showToast(text);
   }
 
   // ---------- UNLOCK / VISIBILITY ----------
@@ -1586,7 +1585,6 @@
           state.meta.lifetimeProduced[r] = state.meta.totalProduced[r];
         }
       }
-      state.log = Array.isArray(state.log) ? state.log : [];
       invalidateRM();
       return true;
     } catch (e) { console.error('[blueprint] load failed', e); return false; }
@@ -2197,55 +2195,7 @@
       dom.side.supportGrid.appendChild(btn);
     }
 
-    // ACTIVITY
-    const logBox = document.createElement('div');
-    logBox.className = 'side-box activity-box';
-    logBox.innerHTML = `
-      <div class="log-head">
-        <h3>TIPS</h3>
-        <div class="log-head-btns">
-          <button class="log-clear-btn" data-log-mute title="Mute or unmute future tips">MUTE</button>
-          <button class="log-clear-btn" data-log-clear>CLEAR ALL</button>
-        </div>
-      </div>
-      <div class="log-list" data-log></div>
-      <div class="log-muted-note" data-muted-note style="display:none">Tips muted. <span class="log-unmute">Click to resume</span>.</div>
-    `;
-    sidebarEl.appendChild(logBox);
-    dom.side.logBox = logBox;
-    dom.side.logList = logBox.querySelector('[data-log]');
-    dom.side.logClearBtn = logBox.querySelector('[data-log-clear]');
-    dom.side.logMuteBtn = logBox.querySelector('[data-log-mute]');
-    dom.side.logMutedNote = logBox.querySelector('[data-muted-note]');
-    dom.side.logClearBtn.addEventListener('click', () => {
-      if (!state.log || state.log.length === 0) return;
-      state.log = [];
-      prevLogSig = '';
-      renderActivityLog();
-    });
-    dom.side.logMuteBtn.addEventListener('click', () => {
-      state.settings.tipsMuted = !state.settings.tipsMuted;
-      if (state.settings.tipsMuted) state.log = [];
-      prevLogSig = '';
-      renderActivityLog();
-    });
-    logBox.querySelector('.log-unmute').addEventListener('click', () => {
-      state.settings.tipsMuted = false;
-      prevLogSig = '';
-      renderActivityLog();
-    });
-    // event delegation for per-item × close
-    dom.side.logList.addEventListener('click', (e) => {
-      const x = e.target.closest('.log-close');
-      if (!x) return;
-      const idx = parseInt(x.dataset.idx, 10);
-      if (!Number.isNaN(idx) && state.log[idx]) {
-        state.log.splice(idx, 1);
-        prevLogSig = '';
-        renderActivityLog();
-      }
-    });
-    prevLogSig = ''; // force fresh render after rebuild
+    // Tips/hints now fire as toast popups instead of accumulating in a sidebar list.
   }
   function renderSidebar() {
     factoryViewEl.classList.toggle('has-sidebar', sidebarVisible());
@@ -2283,50 +2233,6 @@
       }
       dom.side.supportHint.innerHTML = hintHtml;
     }
-
-    renderActivityLog();
-  }
-  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
-
-  // Only rebuild log innerHTML when entries change (otherwise the fade-in animation
-  // replays every frame and items stay invisible). Between real changes, just
-  // refresh the "X ago" timestamps in place.
-  let prevLogSig = '';
-  function logSig() {
-    const first = state.log[0];
-    return (state.log?.length || 0) + '|' + (first?.t || 0) + '|' + (first?.text || '');
-  }
-  function renderActivityLog() {
-    if (!dom.side.logList) return;
-    const muted = state.settings && state.settings.tipsMuted;
-    if (dom.side.logMuteBtn) dom.side.logMuteBtn.textContent = muted ? 'UNMUTE' : 'MUTE';
-    if (dom.side.logMutedNote) dom.side.logMutedNote.style.display = muted ? 'block' : 'none';
-    if (dom.side.logList) dom.side.logList.style.display = muted ? 'none' : '';
-
-    const sig = logSig() + (muted ? '|m' : '|u');
-    const hasLog = state.log && state.log.length > 0;
-    if (dom.side.logClearBtn) dom.side.logClearBtn.disabled = !hasLog;
-
-    if (sig === prevLogSig) {
-      // just update relative timestamps
-      const now = Date.now();
-      const items = dom.side.logList.querySelectorAll('.log-item .log-time');
-      items.forEach((el, i) => {
-        if (state.log[i]) el.textContent = '· ' + fmtAgo(now - state.log[i].t);
-      });
-      return;
-    }
-    prevLogSig = sig;
-
-    if (!hasLog) {
-      dom.side.logList.innerHTML = `<div class="log-empty">No activity yet.</div>`;
-      return;
-    }
-    const now = Date.now();
-    dom.side.logList.innerHTML = state.log.map((e, i) => {
-      const isTip = /^TIP/i.test((e.text || '').trim());
-      return `<div class="log-item${isTip ? ' tip' : ''}">${escapeHtml(e.text)} <span class="log-time">· ${fmtAgo(now - e.t)}</span><span class="log-close" data-idx="${i}" title="Dismiss">×</span></div>`;
-    }).join('');
   }
 
   // ---------- TIER UNLOCKS BAR ----------
@@ -2426,6 +2332,7 @@
       const p = treePos(id);
       const grp = svgEl('g', { transform: `translate(${p.x}, ${p.y})` });
       grp.classList.add('tree-node');
+      if (n.branch) grp.classList.add('br-' + n.branch);
       grp.dataset.node = id;
       const radius = id === 'origin' ? 22 : (n.pos.r === 1 ? 16 : 13);
 
@@ -3127,6 +3034,13 @@
       <div class="settings-group">
         <h4>ONBOARDING</h4>
         <div class="settings-row">
+          <span class="label">TIP POPUPS</span>
+          <div class="seg">
+            <button id="set-tips-on"  class="${!s.tipsMuted ? 'on' : ''}">ON</button>
+            <button id="set-tips-off" class="${ s.tipsMuted ? 'on' : ''}">OFF</button>
+          </div>
+        </div>
+        <div class="settings-row">
           <span class="label">RESET ALL HINTS</span>
           <button class="btn" id="set-reset-hints">CLEAR</button>
         </div>
@@ -3194,6 +3108,8 @@
       s.hintsShown = {};
       toast('<b>Hints cleared.</b> They will appear again as you play.');
     });
+    bg.querySelector('#set-tips-on').addEventListener('click',  () => { s.tipsMuted = false; save(); showSettings(); bg.remove(); });
+    bg.querySelector('#set-tips-off').addEventListener('click', () => { s.tipsMuted = true;  save(); showSettings(); bg.remove(); });
     const fsBtn = bg.querySelector('#set-fullscreen');
     if (fsBtn) fsBtn.addEventListener('click', () => {
       toggleFullscreen();
