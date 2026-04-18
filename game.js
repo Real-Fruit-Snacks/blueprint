@@ -3214,6 +3214,26 @@
         </div>
       </div>
       <div class="settings-group">
+        <h4>SAVE &amp; SYSTEM</h4>
+        ${fsSupported ? `
+        <div class="settings-row">
+          <span class="label">FULLSCREEN</span>
+          <button class="btn" id="set-fullscreen">${inFullscreen() ? 'EXIT' : 'ENTER'}</button>
+        </div>` : ''}
+        <div class="settings-row">
+          <span class="label">EXPORT SAVE</span>
+          <button class="btn" id="set-export">EXPORT</button>
+        </div>
+        <div class="settings-row">
+          <span class="label">IMPORT SAVE</span>
+          <button class="btn" id="set-import">IMPORT</button>
+        </div>
+        <div class="settings-row">
+          <span class="label">RESET GAME</span>
+          <button class="btn warn" id="set-reset">WIPE</button>
+        </div>
+      </div>
+      <div class="settings-group">
         <h4>CONTROLS</h4>
         <div style="font-family: var(--font-ui); font-size: 11px; color: var(--text); line-height: 1.8;">
           <div><b style="color:var(--accent)">CLICK</b> machine to buy 1</div>
@@ -3247,6 +3267,15 @@
       s.hintsShown = {};
       toast('<b>Hints cleared.</b> They will appear again as you play.');
     });
+    const fsBtn = bg.querySelector('#set-fullscreen');
+    if (fsBtn) fsBtn.addEventListener('click', () => {
+      toggleFullscreen();
+      // Refresh the label — the state flip is async, so give the event a tick.
+      setTimeout(() => { fsBtn.textContent = inFullscreen() ? 'EXIT' : 'ENTER'; }, 100);
+    });
+    bg.querySelector('#set-export').addEventListener('click', () => { bg.remove(); actionExport(); });
+    bg.querySelector('#set-import').addEventListener('click', () => { bg.remove(); actionImport(); });
+    bg.querySelector('#set-reset').addEventListener('click',  () => { bg.remove(); actionReset(); });
   }
 
   // ---------- RENDER ----------
@@ -3407,62 +3436,49 @@
       `<p>You were away for <b>${fmtDuration(report.elapsed)}</b>${report.elapsed >= OFFLINE_CAP_MS - 1000 ? ' (capped at 8h)' : ''}.</p>
        <ul class="earned-list">${list}</ul>`);
   }
+  // ---------- SYSTEM ACTIONS (wired from the Settings modal) ----------
+  const fsSupported = !!(document.documentElement.requestFullscreen
+    || document.documentElement.webkitRequestFullscreen);
+  function inFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function toggleFullscreen() {
+    const doc = document;
+    if (inFullscreen()) {
+      if (doc.exitFullscreen) doc.exitFullscreen();
+      else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+    } else {
+      const el = doc.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    }
+  }
+  function actionExport() {
+    save();
+    showModal('EXPORT SAVE',
+      `<p>Copy this string. Paste it into IMPORT to restore your game.</p>
+       <textarea readonly>${exportSave()}</textarea>`);
+  }
+  function actionImport() {
+    showModal('IMPORT SAVE',
+      `<p>Paste an exported save string. This will overwrite your current progress.</p>
+       <textarea placeholder="paste save string..."></textarea>`,
+      { confirmLabel: 'IMPORT', onConfirm: (bg) => {
+        const code = bg.querySelector('textarea').value;
+        if (importSave(code)) {
+          bg.remove(); prevUnlockSig = ''; rebuildAll();
+          showModal('◆ IMPORT OK', `<p>Save restored.</p>`);
+        } else showModal('◆ IMPORT FAILED', `<p>That save string isn't valid.</p>`);
+      }});
+  }
+  function actionReset() {
+    showModal('RESET GAME', `<p>Wipe all progress (including Schematics and tree)?</p>`,
+      { confirmLabel: 'WIPE', onConfirm: (bg) => { wipe(); bg.remove(); }});
+  }
+
   function bindUI() {
     const setBtn = document.getElementById('btn-settings');
     if (setBtn) setBtn.addEventListener('click', showSettings);
-
-    // Fullscreen toggle — hidden on platforms that don't support the API (iOS Safari)
-    const fsBtn = document.getElementById('btn-fullscreen');
-    if (fsBtn) {
-      const fsSupported = !!(document.documentElement.requestFullscreen
-        || document.documentElement.webkitRequestFullscreen);
-      if (!fsSupported) {
-        fsBtn.style.display = 'none';
-      } else {
-        fsBtn.addEventListener('click', () => {
-          const doc = document;
-          const inFs = doc.fullscreenElement || doc.webkitFullscreenElement;
-          if (inFs) {
-            if (doc.exitFullscreen) doc.exitFullscreen();
-            else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
-          } else {
-            const el = doc.documentElement;
-            if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-          }
-        });
-        const syncFsState = () => {
-          const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-          fsBtn.classList.toggle('on', inFs);
-          const label = fsBtn.querySelector('.btn-label');
-          if (label) label.textContent = inFs ? 'EXIT FS' : 'FULLSCREEN';
-        };
-        document.addEventListener('fullscreenchange', syncFsState);
-        document.addEventListener('webkitfullscreenchange', syncFsState);
-      }
-    }
-    document.getElementById('btn-export').addEventListener('click', () => {
-      save();
-      showModal('EXPORT SAVE',
-        `<p>Copy this string. Paste it into IMPORT to restore your game.</p>
-         <textarea readonly>${exportSave()}</textarea>`);
-    });
-    document.getElementById('btn-import').addEventListener('click', () => {
-      showModal('IMPORT SAVE',
-        `<p>Paste an exported save string. This will overwrite your current progress.</p>
-         <textarea placeholder="paste save string..."></textarea>`,
-        { confirmLabel: 'IMPORT', onConfirm: (bg) => {
-          const code = bg.querySelector('textarea').value;
-          if (importSave(code)) {
-            bg.remove(); prevUnlockSig = ''; rebuildAll();
-            showModal('◆ IMPORT OK', `<p>Save restored.</p>`);
-          } else showModal('◆ IMPORT FAILED', `<p>That save string isn't valid.</p>`);
-        }});
-    });
-    document.getElementById('btn-reset').addEventListener('click', () => {
-      showModal('RESET GAME', `<p>Wipe all progress (including Schematics and tree)?</p>`,
-        { confirmLabel: 'WIPE', onConfirm: (bg) => { wipe(); bg.remove(); }});
-    });
   }
 
   // ---------- BOOT ----------

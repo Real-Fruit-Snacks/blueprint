@@ -1587,12 +1587,6 @@ body {
 .btn.warn { border-color: var(--warn); color: var(--warn); }
 .btn.warn:hover { background: rgba(255, 126, 95, 0.15); color: var(--white); }
 .btn.on { border-color: var(--ok); color: var(--ok); background: rgba(120, 224, 143, 0.08); }
-.btn.btn-fs svg polyline {
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: square;
-  fill: none;
-}
 
 .btn.btn-icon {
   display: inline-flex; align-items: center; gap: 6px;
