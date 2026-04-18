@@ -2471,8 +2471,11 @@
           lastTipMouse.x = r.left + r.width / 2;
           lastTipMouse.y = r.top + r.height / 2;
         }
-        // Only arm nodes that could actually be purchased (ignore owned / locked / prereq-missing)
-        if (nodeState(id) !== 'available') { disarmNode(); renderTree(); return; }
+        // Only arm nodes that could actually be purchased — skip owned / locked / prereq-missing
+        // and also skip "available but unaffordable" so we don't promise a confirm click the user can't deliver.
+        if (nodeState(id) !== 'available' || state.meta.schematics < nodeNextCost(id)) {
+          disarmNode(); renderTree(); renderTooltipFor(id); return;
+        }
         if (armedNode === id) {
           // second click → confirm
           if (researchBuy(id)) { pulseNode(grp); haptic(20); }
