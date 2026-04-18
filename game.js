@@ -623,6 +623,175 @@
     },
   };
 
+  // ---------- BLUEPRINTS (per-run modifiers) ----------
+  // After each prestige (once the player has 3+ under their belt), three random
+  // Blueprints are rolled and the player picks one. The selected modifier lasts
+  // that single run. Blueprints change *rules*, not just scale numbers — the
+  // goal is run-to-run variance, not more stacking %.
+  //
+  // effect keys used by rm() + tick(): see applyEffect. Rarity is cosmetic
+  // (display colour); all ten roll uniformly.
+  const BLUEPRINTS = {
+    overdrive: {
+      name: 'OVERDRIVE', rarity: 'common',
+      desc: 'Production <b>×2</b>. Consumption <b>×1.5</b>.',
+      applyEffect: (m) => { m.prodMul *= 2; m.consMul *= 1.5; },
+    },
+    frugal: {
+      name: 'FRUGAL', rarity: 'common',
+      desc: 'Machine costs <b>halved</b>. Production <b>×0.8</b>.',
+      applyEffect: (m) => { m.costMul *= 0.5; m.prodMul *= 0.8; },
+    },
+    inert: {
+      name: 'INERT', rarity: 'rare',
+      desc: 'Supports do <b>nothing</b>. Base production <b>+40%</b>.',
+      applyEffect: (m) => { m.inertSupports = true; m.prodMul *= 1.40; },
+    },
+    jumpstart: {
+      name: 'JUMPSTART', rarity: 'common',
+      desc: 'Start with <b>500 ingots</b>. All production <b>×0.8</b>.',
+      applyEffect: (m) => { m.prodMul *= 0.8; },
+      applyStartup: (st) => { st.resources.ingot = Math.max(500, st.resources.ingot || 0); },
+    },
+    clicker: {
+      name: 'CLICKER', rarity: 'rare',
+      desc: 'Click power <b>×20</b>. Auto-click <b>disabled</b>. A clicker run.',
+      applyEffect: (m) => { m.clickMul += 19; m.autoClickPerSec = 0; m.autoClickDisabled = true; },
+    },
+    windfall: {
+      name: 'WINDFALL', rarity: 'rare',
+      desc: 'Schematic gain <b>×2</b>. Cores count as <b>0</b> for score.',
+      applyEffect: (m) => { m.schematicMul *= 2; m.noCoreScore = true; },
+    },
+    fusion: {
+      name: 'FUSION', rarity: 'rare',
+      desc: 'Ingot machines also produce <b>+0.02 cores/s</b> directly. Shortcut the chain.',
+      applyEffect: (m) => { m.fusionPath = 0.02; },
+    },
+    mirror: {
+      name: 'MIRROR', rarity: 'mythic',
+      desc: 'Machines consume <b>nothing</b>. Production <b>×0.5</b>. Pure output.',
+      applyEffect: (m) => { m.consFree = true; m.prodMul *= 0.5; },
+    },
+    lucky_fifth: {
+      name: 'LUCKY FIFTH', rarity: 'mythic',
+      desc: 'Every <b>5th</b> machine of each type is <b>free</b>. No other cost change.',
+      applyEffect: (m) => { m.luckyFifth = true; },
+    },
+    patient: {
+      name: 'PATIENT', rarity: 'rare',
+      desc: 'Production <b>+100%</b>. Prestige locked for <b>5 minutes</b>.',
+      minRunMs: 5 * 60 * 1000,
+      applyEffect: (m) => { m.prodMul *= 2; },
+    },
+  };
+
+  function activeBlueprint() {
+    const b = state.meta.blueprints;
+    return (b && b.active) || null;
+  }
+  function blueprintsUnlocked() {
+    return (state.meta.prestigeCount || 0) >= 3;
+  }
+  function rollBlueprintPool() {
+    const ids = Object.keys(BLUEPRINTS);
+    // Fisher-Yates to 3
+    const shuffled = ids.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, 3);
+  }
+  function selectBlueprint(id) {
+    if (!BLUEPRINTS[id]) return false;
+    state.meta.blueprints.active = id;
+    state.meta.blueprints.pool = [];
+    state.meta.blueprints.timesUsed[id] = (state.meta.blueprints.timesUsed[id] || 0) + 1;
+    state.meta.blueprints.seen[id] = true;
+    // Re-apply startup in case the chosen Blueprint grants starter resources
+    // (e.g. JUMPSTART). Safe to call again — startup bonuses are idempotent.
+    applyStartupBonuses();
+    invalidateRM();
+    save();
+    renderBlueprintChip();
+    toast(`<b>⧉ BLUEPRINT</b><br>${BLUEPRINTS[id].name} — ${BLUEPRINTS[id].desc}`, { duration: 5000 });
+    return true;
+  }
+  function skipBlueprint() {
+    state.meta.blueprints.active = null;
+    state.meta.blueprints.pool = [];
+    invalidateRM();
+    save();
+    renderBlueprintChip();
+    return true;
+  }
+  function showBlueprintChoiceModal() {
+    const pool = (state.meta.blueprints && state.meta.blueprints.pool) || [];
+    if (!pool.length) return;
+    const cardsHtml = pool.map(id => {
+      const b = BLUEPRINTS[id];
+      const uses = (state.meta.blueprints.timesUsed && state.meta.blueprints.timesUsed[id]) || 0;
+      return `
+        <button class="blueprint-card rarity-${b.rarity}" data-blueprint="${id}">
+          <div class="bp-rarity">${b.rarity.toUpperCase()}</div>
+          <div class="bp-name">${b.name}</div>
+          <div class="bp-desc">${b.desc}</div>
+          ${uses > 0 ? `<div class="bp-uses">used ${uses}×</div>` : ''}
+        </button>
+      `;
+    }).join('');
+    const bg = document.createElement('div');
+    bg.className = 'modal-bg blueprint-modal-bg';
+    bg.innerHTML = `
+      <div class="modal blueprint-modal">
+        <h3>⧉ CHOOSE A BLUEPRINT</h3>
+        <p>This modifier is active for your next run. Rerolls on your next prestige.</p>
+        <div class="blueprint-grid">${cardsHtml}</div>
+        <div class="actions">
+          <button class="btn" data-bp-skip>PLAY WITHOUT MODIFIER</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(bg);
+    bg.querySelectorAll('[data-blueprint]').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.blueprint;
+        selectBlueprint(id);
+        bg.remove();
+      });
+    });
+    bg.querySelector('[data-bp-skip]').addEventListener('click', () => {
+      skipBlueprint();
+      bg.remove();
+    });
+  }
+  // Topbar chip — tiny indicator that a Blueprint is active this run.
+  let blueprintChipEl = null;
+  function renderBlueprintChip() {
+    const id = activeBlueprint();
+    // Reuse the existing topbar — place the chip between logo and res-bar.
+    const topbar = document.querySelector('.topbar');
+    if (!topbar) return;
+    if (!id) {
+      if (blueprintChipEl && blueprintChipEl.parentNode) blueprintChipEl.parentNode.removeChild(blueprintChipEl);
+      blueprintChipEl = null;
+      return;
+    }
+    const b = BLUEPRINTS[id];
+    if (!blueprintChipEl) {
+      blueprintChipEl = document.createElement('div');
+      blueprintChipEl.className = 'blueprint-chip';
+      // Insert after the logo
+      const logo = topbar.querySelector('.logo');
+      if (logo && logo.nextSibling) topbar.insertBefore(blueprintChipEl, logo.nextSibling);
+      else topbar.appendChild(blueprintChipEl);
+    }
+    blueprintChipEl.className = `blueprint-chip rarity-${b.rarity}`;
+    blueprintChipEl.innerHTML = `<span class="bc-tag">⧉</span><span class="bc-name">${b.name}</span>`;
+    blueprintChipEl.title = b.desc.replace(/<[^>]+>/g, '');
+  }
+
   // Challenge helpers. Kept inside the IIFE so they close over state; the
   // actual enforcement lives at the relevant call sites (clickResource etc).
   function activeChallenge() {
@@ -822,6 +991,10 @@
     ch_slow_burn:    { prodMul: 0.05,        label: '+5% production' },
     ch_chaos:        { prodMul: 0.05,        label: '+5% production' },
     ch_grandmaster:  { prodMul: 0.20, schematicMul: 0.20, label: '+20% production · +20% schematics' },
+
+    // BLUEPRINT — variety/commitment achievements tied to the per-run modifier system.
+    bp_variety:      { schematicMul: 0.10,   label: '+10% schematics gain' },
+    bp_believer:     { prodMul: 0.10,        label: '+10% production' },
   };
 
   const ACHIEVEMENTS = {
@@ -890,6 +1063,9 @@
     ch_slow_burn:     { name: '◆ SLOW BURN MODE',  desc: 'Complete the Slow Burn challenge.',                         group: 'challenge' },
     ch_chaos:         { name: '◆ CHAOS MODE',      desc: 'Complete the Chaos challenge.',                             group: 'challenge' },
     ch_grandmaster:   { name: '◆ GRANDMASTER',     desc: 'Complete every challenge mode.',                            group: 'challenge' },
+
+    bp_variety:       { name: '◆ BLUEPRINTER',     desc: 'Try every unique Blueprint at least once.',                 group: 'challenge' },
+    bp_believer:      { name: '◆ TRUE BELIEVER',   desc: 'Prestige with the same Blueprint 5 times.',                 group: 'challenge' },
   };
 
   // Returns { current, goal } for any achievement so progress bars can render.
@@ -984,6 +1160,18 @@
         let c = 0; const total = Object.keys(CHALLENGES).length;
         for (const k in CHALLENGES) if (done[k]) c++;
         return { current: c, goal: total };
+      }
+      case 'bp_variety': {
+        const seen = (m.blueprints && m.blueprints.seen) || {};
+        let c = 0; const total = Object.keys(BLUEPRINTS).length;
+        for (const k in BLUEPRINTS) if (seen[k]) c++;
+        return { current: c, goal: total };
+      }
+      case 'bp_believer': {
+        const uses = (m.blueprints && m.blueprints.timesUsed) || {};
+        let best = 0;
+        for (const k in uses) if (uses[k] > best) best = uses[k];
+        return { current: best, goal: 5 };
       }
     }
     return { current: 0, goal: 1 };
@@ -1220,6 +1408,11 @@
         // Fires once when the first Prototype ever produced crosses ≥1 so
         // the gateway-to-meta-prestige moment gets the celebrate treatment.
         firstPrototypeCelebrated: false,
+        // Blueprints — per-run modifier rolled from BLUEPRINTS. `pool` holds
+        // three rolled ids awaiting player choice; `timesUsed` tracks repeat
+        // picks for the TRUE BELIEVER achievement; `seen` counts all unique
+        // ids ever selected for BLUEPRINTER.
+        blueprints: { active: null, pool: [], timesUsed: {}, seen: {} },
       },
       log: [],
       lastSaveAt: Date.now(),
@@ -1853,10 +2046,16 @@
   function canPrestige() {
     if (schematicsForPrestige() < 1) return false;
     // SLOW BURN challenge — forced minimum run length before prestige allowed.
-    const id = activeChallenge();
-    if (id && CHALLENGES[id] && CHALLENGES[id].minRunMs) {
+    const cid = activeChallenge();
+    if (cid && CHALLENGES[cid] && CHALLENGES[cid].minRunMs) {
       const elapsed = Date.now() - (state.meta.currentRunStartAt || Date.now());
-      if (elapsed < CHALLENGES[id].minRunMs) return false;
+      if (elapsed < CHALLENGES[cid].minRunMs) return false;
+    }
+    // PATIENT blueprint — same idea, different source.
+    const bid = activeBlueprint();
+    if (bid && BLUEPRINTS[bid] && BLUEPRINTS[bid].minRunMs) {
+      const elapsed = Date.now() - (state.meta.currentRunStartAt || Date.now());
+      if (elapsed < BLUEPRINTS[bid].minRunMs) return false;
     }
     return true;
   }
@@ -2028,6 +2227,12 @@
   }
 
   function applyStartupBonuses() {
+    // Blueprint startup — e.g. JUMPSTART adds starting ingots. Runs even if
+    // Ironman skips patent heirlooms, since Blueprints are per-run modifiers.
+    const bpId = activeBlueprint();
+    if (bpId && BLUEPRINTS[bpId] && BLUEPRINTS[bpId].applyStartup) {
+      BLUEPRINTS[bpId].applyStartup(state);
+    }
     // IRONMAN challenge: patent heirlooms are suppressed for this run.
     if (activeChallenge() === 'ironman') return;
     const lvls = state.research.patentLevels || {};
@@ -2100,6 +2305,13 @@
       distributed: 0,
       nexus: 0,
       supportCountMul: 1,
+      // blueprint modifier fields
+      inertSupports: false,
+      autoClickDisabled: false,
+      noCoreScore: false,
+      fusionPath: 0,
+      consFree: false,
+      luckyFifth: false,
     };
     for (const id in TREE_NODES) {
       const lvl = nodeLevel(id);
@@ -2132,6 +2344,11 @@
       const ch = CHALLENGES[id];
       if (ch && ch.applyReward) ch.applyReward(m);
     }
+    // blueprint layer — single active modifier for the current run only.
+    const bpId = activeBlueprint();
+    if (bpId && BLUEPRINTS[bpId] && BLUEPRINTS[bpId].applyEffect) {
+      BLUEPRINTS[bpId].applyEffect(m);
+    }
     return m;
   }
   function invalidateRM() { runtime.rm = null; }
@@ -2142,10 +2359,13 @@
     const r = rm();
     let mul = r.prodMul;
     const sMul = r.supportCountMul || 1;
-    for (const id in SUPPORTS) {
-      const count = (state.supports[id] || 0) * sMul;
-      const eff = (SUPPORTS[id].effect.prodMul || 0) * r.powerBoost;
-      mul *= (1 + eff * count);
+    // INERT blueprint — supports contribute nothing
+    if (!r.inertSupports) {
+      for (const id in SUPPORTS) {
+        const count = (state.supports[id] || 0) * sMul;
+        const eff = (SUPPORTS[id].effect.prodMul || 0) * r.powerBoost;
+        mul *= (1 + eff * count);
+      }
     }
     const cap = MOMENTUM_CAP + (r.momentumCapAdd || 0);
     const momentumBonus = Math.min(cap, (totalMachines || 0) * r.momentum);
@@ -2154,12 +2374,16 @@
   }
   function globalConsMul() {
     const r = rm();
+    // MIRROR blueprint — consumption floored to 0
+    if (r.consFree) return 0;
     let mul = r.consMul;
     const sMul = r.supportCountMul || 1;
-    for (const id in SUPPORTS) {
-      const count = (state.supports[id] || 0) * sMul;
-      const eff = (SUPPORTS[id].effect.consMul || 0) * r.powerBoost;
-      mul *= Math.max(0.05, 1 + eff * count);
+    if (!r.inertSupports) {
+      for (const id in SUPPORTS) {
+        const count = (state.supports[id] || 0) * sMul;
+        const eff = (SUPPORTS[id].effect.consMul || 0) * r.powerBoost;
+        mul *= Math.max(0.05, 1 + eff * count);
+      }
     }
     return mul;
   }
@@ -2191,10 +2415,15 @@
     if (!machineUnlocked(id)) return false;
     // TALL: hard cap at 3 per machine type. Bulk buys stop early at the cap.
     if (activeChallenge() === 'tall' && (state.machines[id] || 0) >= 3) return false;
+    // LUCKY FIFTH blueprint — the 5th, 10th, 15th… purchase of a machine is free.
+    const nextCount = (state.machines[id] || 0) + 1;
+    const luckyFree = rm().luckyFifth && nextCount % 5 === 0;
     const cost = machineCost(id);
-    if (!canAfford(cost)) return false;
-    for (const res in cost) state.resources[res] -= cost[res];
-    state.machines[id] = (state.machines[id] || 0) + 1;
+    if (!luckyFree) {
+      if (!canAfford(cost)) return false;
+      for (const res in cost) state.resources[res] -= cost[res];
+    }
+    state.machines[id] = nextCount;
     return true;
   }
   function buyOne(id) {
@@ -2494,6 +2723,16 @@
           runtime.prodRate[res] = (runtime.prodRate[res] || 0) + rate;
           runtime.totalProdPerSec += rate;
         }
+        // FUSION blueprint — ingot producers drip cores directly (shortcut the chain).
+        if (r.fusionPath > 0 && m.produces.ingot) {
+          const fusionRate = r.fusionPath * count * produceRatio * prodMul;
+          const fusionAmt = fusionRate * dt;
+          state.resources.core = (state.resources.core || 0) + fusionAmt;
+          state.meta.totalProduced.core = (state.meta.totalProduced.core || 0) + fusionAmt;
+          state.meta.lifetimeProduced.core = (state.meta.lifetimeProduced.core || 0) + fusionAmt;
+          state.meta.currentRunCores = (state.meta.currentRunCores || 0) + fusionAmt;
+          runtime.prodRate.core = (runtime.prodRate.core || 0) + fusionRate;
+        }
       }
     }
 
@@ -2686,7 +2925,11 @@
     const p = state.meta.totalProduced || {};
     const r = rm();
     let score = 0;
-    for (const res in TIER_SCORE_WEIGHTS) score += (p[res] || 0) * TIER_SCORE_WEIGHTS[res];
+    for (const res in TIER_SCORE_WEIGHTS) {
+      // WINDFALL blueprint — cores do not contribute to score.
+      if (r.noCoreScore && res === 'core') continue;
+      score += (p[res] || 0) * TIER_SCORE_WEIGHTS[res];
+    }
     const base = Math.floor(Math.cbrt(score * r.doublePay / 150));
     let schem = Math.floor(base * r.schematicMul);
     // PRESTIGE STREAK patent: +20% if within 3 min of last prestige
@@ -2794,8 +3037,24 @@
         save();
       }, ms ? 2800 : 1400);
     }
+    // Blueprint: clear last-run's active Blueprint, then (once the player has
+    // ≥3 lifetime prestiges) roll 3 new options and queue the choice modal.
+    // Challenges override Blueprints — if one is active, skip this.
+    if (state.meta.blueprints) state.meta.blueprints.active = null;
+    if (blueprintsUnlocked() && !activeChallenge()) {
+      state.meta.blueprints.pool = rollBlueprintPool();
+      // Stagger behind the prestige celebrate banner so the modal doesn't
+      // collide with it. Milestones add extra delay.
+      const delay = ms ? 3200 : 1800;
+      setTimeout(() => {
+        if (state.meta.blueprints.pool && state.meta.blueprints.pool.length) {
+          showBlueprintChoiceModal();
+        }
+      }, delay);
+    }
     save();
     rebuildAll();
+    renderBlueprintChip();
     setTab('tree');
   }
 
@@ -2877,6 +3136,10 @@
         const lp = (state.meta.lifetimeProduced && state.meta.lifetimeProduced.prototype) || 0;
         state.meta.firstPrototypeCelebrated = lp >= 1;
       }
+      state.meta.blueprints = Object.assign(
+        { active: null, pool: [], timesUsed: {}, seen: {} },
+        state.meta.blueprints || {}
+      );
       state.meta = Object.assign(freshState().meta, state.meta || {});
       state.meta.totalProduced = Object.assign(emptyResources(), state.meta.totalProduced || {});
       state.meta.lifetimeProduced = Object.assign(emptyResources(), state.meta.lifetimeProduced || {});
@@ -5082,6 +5345,7 @@
 
     applyStartupBonuses();
     rebuildAll();
+    renderBlueprintChip();
     setTab(state.meta.currentTab === 'tree' && treeTabVisible() ? 'tree' : 'factory');
     prevUnlockSig = '';
     bindTabs(); bindUI();
