@@ -615,7 +615,7 @@
     }
     if (anyNew) {
       invalidateRM();    // bonuses apply immediately
-      audio.unlock();    // subtle audio cue
+      audio.achievement();
       prevAchSig = '';   // force achievements panel to re-render
     }
   }
@@ -712,17 +712,29 @@
   };
 
   // ---------- AUDIO ----------
-  // Procedural Web Audio — no external files. Every tone synthesized on demand.
+  // Procedural Web Audio — no external files. Every sound synthesized on demand.
+  // Architecture: master gain → soft-knee compressor → destination, so layered
+  // events (e.g. ten machine buys at once) don't peak harshly. Voices use a
+  // proper attack/decay envelope; bigger events stack two harmonic oscillators
+  // (sine + triangle) plus an optional filtered noise transient.
   const audio = (() => {
-    let ctx = null, master = null;
+    let ctx = null, master = null, comp = null;
+
     function init() {
       if (ctx) return true;
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return false;
       ctx = new AC();
+      // master → compressor → destination
       master = ctx.createGain();
       master.gain.value = (state.settings && state.settings.volume != null) ? state.settings.volume : 0.5;
-      master.connect(ctx.destination);
+      comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -16;
+      comp.knee.value = 12;
+      comp.ratio.value = 4;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.18;
+      master.connect(comp).connect(ctx.destination);
       return true;
     }
     function setVolume(v) {
@@ -731,43 +743,224 @@
     function silent() {
       return state.settings && (state.settings.muted || (state.settings.volume || 0) <= 0);
     }
-    function tone(freq, dur, opts = {}) {
-      if (silent()) return;
-      if (!init()) return;
+    function now() { return ctx.currentTime; }
+
+    // Single-voice tone with attack-release envelope.
+    function voice(freq, dur, opts = {}) {
+      const t = opts.start != null ? opts.start : now();
       const type = opts.type || 'sine';
-      const vol = opts.vol != null ? opts.vol : 0.2;
-      const now = ctx.currentTime;
+      const vol = opts.vol != null ? opts.vol : 0.18;
+      const attack = opts.attack != null ? opts.attack : 0.005;
       const o = ctx.createOscillator();
       const g = ctx.createGain();
-      o.type = type; o.frequency.value = freq;
-      g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(vol, now + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-      o.connect(g).connect(master);
-      o.start(now); o.stop(now + dur + 0.05);
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      if (opts.detune) o.detune.value = opts.detune;
+      if (opts.bend) o.frequency.exponentialRampToValueAtTime(opts.bend, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const dest = opts.dest || master;
+      o.connect(g).connect(dest);
+      o.start(t); o.stop(t + dur + 0.05);
+      return { osc: o, gain: g };
+    }
+    // Two-osc unison for a fuller note (sine fundamental + triangle harmonic).
+    function chime(freq, dur, opts = {}) {
+      const t = opts.start != null ? opts.start : now();
+      const vol = opts.vol != null ? opts.vol : 0.16;
+      voice(freq, dur, { ...opts, start: t, type: 'sine',     vol: vol });
+      voice(freq * 2, dur * 0.85, { ...opts, start: t, type: 'triangle', vol: vol * 0.45 });
+    }
+    function chord(freqs, dur, opts = {}) {
+      const t = opts.start != null ? opts.start : now();
+      const per = (opts.vol || 0.16) / Math.sqrt(freqs.length);
+      freqs.forEach(f => chime(f, dur, { ...opts, start: t, vol: per }));
+    }
+    // Quick filtered-noise transient — adds bite to clicks and buys.
+    function noise(dur, opts = {}) {
+      const t = opts.start != null ? opts.start : now();
+      const vol = opts.vol != null ? opts.vol : 0.10;
+      const lp = opts.lp || 1800;
+      const hp = opts.hp || 0;
+      const buf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const lpFilt = ctx.createBiquadFilter(); lpFilt.type = 'lowpass'; lpFilt.frequency.value = lp;
+      let chain = src.connect(lpFilt);
+      if (hp > 0) {
+        const hpFilt = ctx.createBiquadFilter(); hpFilt.type = 'highpass'; hpFilt.frequency.value = hp;
+        chain = chain.connect(hpFilt);
+      }
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      chain.connect(g).connect(master);
+      src.start(t); src.stop(t + dur + 0.05);
     }
     function sweep(f1, f2, dur, opts = {}) {
-      if (silent()) return;
-      if (!init()) return;
-      const now = ctx.currentTime;
+      const t = opts.start != null ? opts.start : now();
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.type = opts.type || 'sine';
-      o.frequency.setValueAtTime(f1, now);
-      o.frequency.exponentialRampToValueAtTime(f2, now + dur);
-      g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(opts.vol || 0.25, now + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.frequency.setValueAtTime(f1, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(opts.vol || 0.20, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g).connect(master);
-      o.start(now); o.stop(now + dur + 0.05);
+      o.start(t); o.stop(t + dur + 0.05);
     }
+
+    // Tier-pitched mining frequencies (ore → ingot → … → prototype).
+    const MINE_PITCH = [220, 277, 330, 392, 466, 554];
+
+    function play(fn) { return (...args) => { if (silent()) return; if (!init()) return; fn(...args); }; }
+
     return {
       init, setVolume,
-      click:    () => tone(600, 0.04, { type: 'square', vol: 0.1 }),
-      buy:      () => { tone(440, 0.06); setTimeout(() => tone(660, 0.08), 40); },
-      unlock:   () => { tone(392, 0.07); setTimeout(() => tone(523, 0.07), 70); setTimeout(() => tone(659, 0.15), 140); },
-      research: () => { tone(880, 0.05); setTimeout(() => tone(1320, 0.08), 30); },
-      prestige: () => { sweep(180, 900, 0.4, { type: 'triangle', vol: 0.3 }); setTimeout(() => { tone(392, 0.07); setTimeout(() => tone(523, 0.07), 70); setTimeout(() => tone(784, 0.2), 140); }, 280); },
+
+      // ---- UI ----
+      // light click — used by settings preview
+      click: play(() => {
+        const t = now();
+        noise(0.025, { lp: 4000, hp: 1500, vol: 0.05, start: t });
+        voice(880, 0.04, { type: 'square', vol: 0.06, start: t });
+      }),
+      // softer dismiss / tap
+      tap: play(() => voice(520, 0.03, { type: 'sine', vol: 0.05 })),
+      // tab switch — barely-there whoosh
+      tab: play(() => {
+        const t = now();
+        noise(0.10, { lp: 1400, hp: 400, vol: 0.04, start: t });
+      }),
+      // toast appearing — gentle pop
+      toast: play(() => {
+        const t = now();
+        voice(720, 0.05, { type: 'sine', vol: 0.06, start: t });
+        voice(1080, 0.04, { type: 'sine', vol: 0.04, start: t + 0.02 });
+      }),
+      // error / refused click — low buzz
+      error: play(() => {
+        const t = now();
+        voice(140, 0.10, { type: 'sawtooth', vol: 0.08, start: t });
+        voice(95, 0.10,  { type: 'sawtooth', vol: 0.05, start: t });
+      }),
+
+      // ---- MINING ----
+      // Per-tier pitch so progressing tiers feels audibly different.
+      mine: play((tierIdx) => {
+        const t = now();
+        const f = MINE_PITCH[Math.max(0, Math.min(MINE_PITCH.length - 1, tierIdx | 0))];
+        noise(0.04, { lp: 3000, hp: 600, vol: 0.07, start: t });
+        voice(f, 0.07, { type: 'square', vol: 0.10, start: t, bend: f * 1.15 });
+        voice(f * 2, 0.05, { type: 'sine', vol: 0.05, start: t + 0.005 });
+      }),
+      crit: play(() => {
+        const t = now();
+        chime(1568, 0.18, { vol: 0.16, start: t });
+        chime(2093, 0.22, { vol: 0.14, start: t + 0.04 });
+        noise(0.04, { lp: 6000, hp: 3000, vol: 0.06, start: t });
+      }),
+
+      // ---- BUYING ----
+      // Single machine — soft 2-note rise.
+      buy: play(() => {
+        const t = now();
+        noise(0.025, { lp: 2400, hp: 800, vol: 0.05, start: t });
+        chime(523, 0.08, { vol: 0.13, start: t });          // C5
+        chime(784, 0.10, { vol: 0.13, start: t + 0.05 });   // G5
+      }),
+      // Bulk / max buy — quick ascending arpeggio.
+      buyMax: play(() => {
+        const t = now();
+        const notes = [523, 659, 784, 988, 1175];           // C E G B D
+        notes.forEach((f, i) => chime(f, 0.10, { vol: 0.10, start: t + i * 0.045 }));
+        noise(0.04, { lp: 3000, hp: 1000, vol: 0.05, start: t });
+      }),
+      // Support building — slightly heavier than a machine.
+      buyHeavy: play(() => {
+        const t = now();
+        noise(0.04, { lp: 1800, hp: 300, vol: 0.07, start: t });
+        chime(330, 0.12, { vol: 0.14, start: t });
+        chime(440, 0.14, { vol: 0.12, start: t + 0.06 });
+      }),
+      // Auto-buy toggled ON / OFF — different polarity.
+      autoOn: play(() => {
+        const t = now();
+        voice(440, 0.06, { type: 'triangle', vol: 0.10, start: t });
+        voice(659, 0.10, { type: 'triangle', vol: 0.10, start: t + 0.05 });
+      }),
+      autoOff: play(() => {
+        const t = now();
+        voice(523, 0.06, { type: 'triangle', vol: 0.10, start: t });
+        voice(330, 0.10, { type: 'triangle', vol: 0.10, start: t + 0.05 });
+      }),
+
+      // ---- RESEARCH / PROGRESSION ----
+      researchArm: play(() => voice(660, 0.05, { type: 'triangle', vol: 0.08 })),
+      research: play(() => {
+        const t = now();
+        chord([523, 659, 784], 0.20, { vol: 0.16, start: t });
+        chime(1047, 0.12, { vol: 0.10, start: t + 0.10 });
+        noise(0.05, { lp: 5000, hp: 2000, vol: 0.04, start: t });
+      }),
+      // Tier unlocked — celebratory chord cascade.
+      tierUnlock: play(() => {
+        const t = now();
+        sweep(220, 660, 0.25, { type: 'triangle', vol: 0.14, start: t });
+        chord([523, 659, 784], 0.35, { vol: 0.18, start: t + 0.20 });
+        chord([784, 988, 1175], 0.45, { vol: 0.16, start: t + 0.40 });
+        noise(0.10, { lp: 4000, hp: 1500, vol: 0.06, start: t + 0.20 });
+      }),
+      // Achievement earned — short rewarding arpeggio.
+      achievement: play(() => {
+        const t = now();
+        const notes = [523, 659, 784, 1047];                // C major arpeggio
+        notes.forEach((f, i) => chime(f, 0.18, { vol: 0.13, start: t + i * 0.06 }));
+        noise(0.04, { lp: 6000, hp: 3000, vol: 0.05, start: t });
+      }),
+      achievementDismiss: play(() => voice(420, 0.04, { type: 'square', vol: 0.05 })),
+      // Patent purchased — heavier than a single research node.
+      patent: play(() => {
+        const t = now();
+        chord([392, 523, 659], 0.22, { vol: 0.17, start: t });
+        chord([784, 988], 0.32, { vol: 0.13, start: t + 0.12 });
+        noise(0.06, { lp: 3000, hp: 800, vol: 0.06, start: t });
+      }),
+
+      // ---- PRESTIGE / PUBLISH (big moments) ----
+      prestige: play(() => {
+        const t = now();
+        sweep(160, 880, 0.45, { type: 'triangle', vol: 0.22, start: t });
+        chord([392, 523, 659], 0.40, { vol: 0.18, start: t + 0.30 });
+        chord([784, 988, 1175], 0.50, { vol: 0.18, start: t + 0.55 });
+        noise(0.18, { lp: 3500, hp: 600, vol: 0.07, start: t });
+      }),
+      // Publish — deeper, more resonant. The big payoff.
+      publish: play(() => {
+        const t = now();
+        sweep(120, 660, 0.55, { type: 'sawtooth', vol: 0.18, start: t });
+        chord([262, 330, 392], 0.55, { vol: 0.20, start: t + 0.35 });   // C E G
+        chord([523, 659, 784], 0.65, { vol: 0.18, start: t + 0.65 });
+        chord([784, 988, 1175], 0.80, { vol: 0.16, start: t + 0.95 });
+        noise(0.30, { lp: 2500, hp: 200, vol: 0.08, start: t });
+      }),
+
+      // ---- SPECIAL ----
+      goldenTick: play(() => {
+        const t = now();
+        const notes = [1047, 1319, 1568, 2093, 2637];
+        notes.forEach((f, i) => chime(f, 0.22, { vol: 0.10, start: t + i * 0.05 }));
+        noise(0.06, { lp: 8000, hp: 4000, vol: 0.05, start: t });
+      }),
+      welcome: play(() => {
+        const t = now();
+        chord([262, 330, 392], 0.5, { vol: 0.15, start: t });
+        chord([523, 659, 784], 0.6, { vol: 0.13, start: t + 0.30 });
+      }),
     };
   })();
 
@@ -845,7 +1038,7 @@
     if (!canBuyTierUnlock(tierId)) return false;
     state.meta.schematics -= tierUnlockCost(tierId);
     state.research.tiersUnlocked[tierId] = true;
-    audio.unlock();
+    audio.tierUnlock();
     if (tierId === 2) hint('post_t2', '<b>TIP</b> — T2 machines consume Ore. Build enough Drills to keep them fed.');
     prevUnlockSig = '';
     return true;
@@ -957,7 +1150,7 @@
     state.meta.patents -= cost;
     state.research.patentLevels[id] = (state.research.patentLevels[id] || 0) + 1;
     invalidateRM();
-    audio.research();
+    audio.patent();
     return true;
   }
 
@@ -1002,7 +1195,7 @@
     applyStartupBonuses();
     invalidateRM();
     prevUnlockSig = '';
-    audio.prestige();
+    audio.publish();
     save();
     rebuildAll();
     setTab('mastery');
@@ -1137,14 +1330,20 @@
     for (const res in cost) if ((state.resources[res] || 0) < cost[res]) return false;
     return true;
   }
+  // Internal buy-once — used by the buyMultiple/buyMax loops. Doesn't play sound;
+  // the caller plays a single appropriate sound for the whole batch.
   function buy(id) {
     if (!machineUnlocked(id)) return false;
     const cost = machineCost(id);
     if (!canAfford(cost)) return false;
     for (const res in cost) state.resources[res] -= cost[res];
     state.machines[id] = (state.machines[id] || 0) + 1;
-    audio.buy();
     return true;
+  }
+  function buyOne(id) {
+    const ok = buy(id);
+    if (ok) audio.buy();
+    return ok;
   }
   function buyMultiple(id, count) {
     let bought = 0;
@@ -1152,15 +1351,16 @@
       if (!buy(id)) break;
       bought++;
     }
+    if (bought > 0) (bought >= 5 ? audio.buyMax : audio.buy)();
     return bought;
   }
   function buyMax(id) {
     let bought = 0;
-    // safety cap to prevent freeze if cost scaling is bad
     while (bought < 10000 && canAfford(machineCost(id))) {
       if (!buy(id)) break;
       bought++;
     }
+    if (bought > 0) (bought >= 5 ? audio.buyMax : audio.buy)();
     return bought;
   }
   function buyModeCount(mode, r) {
@@ -1176,7 +1376,7 @@
     if (!canAfford(cost)) return false;
     for (const res in cost) state.resources[res] -= cost[res];
     state.supports[id] = (state.supports[id] || 0) + 1;
-    audio.buy();
+    audio.buyHeavy();
     return true;
   }
 
@@ -1242,6 +1442,7 @@
         gt.active = true; gt.endAt = now + 5000;
         state.meta.goldenTicksSeen = (state.meta.goldenTicksSeen || 0) + 1;
         log(`✦ GOLDEN TICK · T${gt.tierId} surges ×10 for 5s`);
+        audio.goldenTick();
       }
     }
 
@@ -1453,7 +1654,10 @@
       runtime.clickSamples[res] = runtime.clickSamples[res] || [];
       runtime.clickSamples[res].push({ t: Date.now(), amt: produced });
     }
-    audio.click();
+    // Pitch the mining sound by tier so each resource sounds distinct.
+    const tierIdx = TIERS.findIndex(t => t.resource === res);
+    audio.mine(tierIdx >= 0 ? tierIdx : 0);
+    if (crit) audio.crit();
     if (crit && r.critCascade) runtime.critCascadeEndAt = Date.now() + 3000;
     return true;
   }
@@ -1662,12 +1866,15 @@
 
   // ---------- TABS ----------
   function setTab(name) {
+    const wasTab = state.meta.currentTab;
     state.meta.currentTab = name;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
     if (name === 'stats') renderStats();
     if (name === 'mastery') renderMastery();
     if (name === 'achievements') { prevAchSig = ''; renderAchievementsSection(); }
+    // Subtle whoosh on actual tab changes (not initial render)
+    if (wasTab && wasTab !== name) audio.tab();
   }
   function bindTabs() {
     document.querySelectorAll('.tab').forEach(t => {
@@ -1711,6 +1918,7 @@
         e.stopPropagation();
         if (!canAutoMine(t.resource)) return;
         state.settings.autoMine[t.resource] = !state.settings.autoMine[t.resource];
+        (state.settings.autoMine[t.resource] ? audio.autoOn : audio.autoOff)();
       });
       resBarEl.appendChild(row);
     });
@@ -1872,6 +2080,7 @@
           e.preventDefault();
           if (!rm().autoBuy || !machineUnlocked(id)) return;
           state.settings.autoBuy[id] = !state.settings.autoBuy[id];
+          (state.settings.autoBuy[id] ? audio.autoOn : audio.autoOff)();
         });
         const autoChip = slot.querySelector('[data-auto-chip]');
         if (autoChip) {
@@ -1879,6 +2088,7 @@
             e.stopPropagation();
             if (!rm().autoBuy || !machineUnlocked(id)) return;
             state.settings.autoBuy[id] = !state.settings.autoBuy[id];
+            (state.settings.autoBuy[id] ? audio.autoOn : audio.autoOff)();
           });
         }
         // Hover on desktop with a 500ms dwell before showing an info toast — so
@@ -1889,7 +2099,7 @@
           if (isSyntheticMouseFromTouch()) return;
           hoverTimer = setTimeout(() => {
             hoverTimer = null;
-            showToast(machineInfoHtml(id));
+            showToast(machineInfoHtml(id), { silent: true });
           }, 500);
         });
         slot.addEventListener('mouseleave', () => {
@@ -1907,7 +2117,7 @@
           pressTimer = setTimeout(() => {
             longPressed = true;
             pressTimer = null;
-            showToast(machineInfoHtml(id));
+            showToast(machineInfoHtml(id), { silent: true });
             haptic(20);
           }, 450);
         }, { passive: true });
@@ -1961,6 +2171,7 @@
       const card = e.target.closest('.ach.earned.new');
       if (!card || !card.dataset.achId) return;
       dismissAchievement(card.dataset.achId);
+      audio.achievementDismiss();
       prevAchSig = '';
       renderAchievementsSection();
     });
@@ -2435,6 +2646,7 @@
         } else {
           // first click → arm
           armNode(id);
+          audio.researchArm();
           haptic(4);
         }
         renderTree();
@@ -2582,6 +2794,9 @@
     // Tap/click anywhere on the toast to dismiss early.
     el.addEventListener('click', () => el.remove());
     toastStackEl.appendChild(el);
+    // Soft tick when a tip/info toast appears — opt-out for hover info popups
+    // that fire on every machine hover (would be too chatty).
+    if (opts.silent !== true) audio.toast();
     // CSS animation handles the fade-out timing; remove from DOM when it ends.
     const drop = () => { if (el.parentNode) el.remove(); };
     setTimeout(drop, opts.duration || 4200);
@@ -3378,6 +3593,7 @@
     showModal('◆ WELCOME BACK',
       `<p>You were away for <b>${fmtDuration(report.elapsed)}</b>${report.elapsed >= OFFLINE_CAP_MS - 1000 ? ' (capped at 8h)' : ''}.</p>
        <ul class="earned-list">${list}</ul>`);
+    audio.welcome();
   }
   // ---------- SYSTEM ACTIONS (wired from the Settings modal) ----------
   const fsSupported = !!(document.documentElement.requestFullscreen
