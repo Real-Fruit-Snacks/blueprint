@@ -22,3 +22,6 @@ redesign.html
 # Node (in case dev tooling is added later)
 node_modules/
 *.log
+
+# itch.io publishing package — build zip, cover, page copy, screenshots
+.itch/
