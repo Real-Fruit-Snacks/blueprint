@@ -331,6 +331,74 @@
                     desc: '<b>+3% production</b> per unique machine type you own (rewards diverse builds).',
                     branch: 'power', pos: { angle: 0, r: 8 }, requires: ['unity'], cost: 800,
                     applyEffect: (m) => { m.symbiosis = 0.03; } },
+
+    // ═══════════════════ CAPSTONE NODES (r9–r10) ═══════════════════
+    // Late-game unique mechanics. These are the "game-altering" tier —
+    // every one introduces a new system rather than a flat % bump.
+
+    // SPEED
+    flash:             { type: 'unlock',  name: 'FLASH',
+                         desc: 'Every <b>30s</b>, a random machine-tier gets <b>×5 production</b> for 8s. Independent of Golden Tick.',
+                         branch: 'speed', pos: { angle: 60, r: 9 }, requires: ['perpetual_motion'], cost: 1500,
+                         applyEffect: (m) => { m.flash = true; } },
+    momentum_plus:     { type: 'leveled', name: 'MOMENTUM+',
+                         desc: 'Momentum cap <b>+15%</b> per level. Base cap is +50%.',
+                         branch: 'speed', pos: { angle: 60, r: 10 }, requires: ['flash'],
+                         maxLevel: 3, costForLevel: (L) => L * 900,
+                         applyEffect: (m, L) => { m.momentumCapAdd += 0.15 * L; } },
+
+    // LOGISTICS
+    triple_strike:     { type: 'unlock',  name: 'TRIPLE STRIKE',
+                         desc: 'Each click counts <b>3×</b> total (stacks with Double Strike → 4×).',
+                         branch: 'logistics', pos: { angle: 120, r: 9 }, requires: ['crit_cascade'], cost: 1500,
+                         applyEffect: (m) => { m.clickMul += 1.0; } },
+    click_storm:       { type: 'unlock',  name: 'CLICK STORM',
+                         desc: '<b>10 clicks in 3s</b> triggers a <b>×2 production storm for 5s</b>. Re-armable. Rewards active play.',
+                         branch: 'logistics', pos: { angle: 120, r: 10 }, requires: ['triple_strike'], cost: 2500,
+                         applyEffect: (m) => { m.clickStorm = true; } },
+
+    // YIELD
+    compound_interest: { type: 'unlock',  name: 'COMPOUND INTEREST',
+                         desc: 'Passive Yield scales with run duration: <b>+2% per minute</b>, capped at <b>+200%</b>.',
+                         branch: 'yield', pos: { angle: 180, r: 9 }, requires: ['golden_tick'], cost: 1500,
+                         applyEffect: (m) => { m.compoundInterest = true; } },
+    alchemy:           { type: 'unlock',  name: 'ALCHEMY',
+                         desc: 'Every 5s, <b>1% of your largest resource</b> converts up one tier (ore→ingot→part…).',
+                         branch: 'yield', pos: { angle: 180, r: 10 }, requires: ['compound_interest'], cost: 3000,
+                         applyEffect: (m) => { m.alchemy = true; } },
+
+    // AUTOMATION
+    blueprint_library: { type: 'leveled', name: 'BLUEPRINT LIBRARY',
+                         desc: 'Blueprint Memory rebuild <b>+5% per level</b> (85% → 90%). Requires Blueprint Memory.',
+                         branch: 'automation', pos: { angle: 240, r: 9 }, requires: ['blueprint_memory'],
+                         maxLevel: 2, costForLevel: (L) => L * 1000,
+                         applyEffect: (m, L) => { m.blueprintPct = 0.80 + 0.05 * L; } },
+    distributed:       { type: 'unlock',  name: 'DISTRIBUTED',
+                         desc: 'Each machine gains <b>+0.5% production</b> per other machine of the same tier you own.',
+                         branch: 'automation', pos: { angle: 240, r: 10 }, requires: ['blueprint_library'], cost: 2500,
+                         applyEffect: (m) => { m.distributed = 0.005; } },
+
+    // EFFICIENCY
+    thermal_runaway:   { type: 'leveled', name: 'THERMAL RUNAWAY',
+                         desc: '<b>+15% production</b> but <b>+3% consumption</b> per level. High-risk multiplier.',
+                         branch: 'efficiency', pos: { angle: 300, r: 9 }, requires: ['chain_reaction'],
+                         maxLevel: 5, costForLevel: (L) => L * 400,
+                         applyEffect: (m, L) => { m.prodMul *= (1 + 0.15 * L); m.consMul *= (1 + 0.03 * L); } },
+    zero_point:        { type: 'unlock',  name: 'ZERO POINT',
+                         desc: '<b>Consumption halved</b> again (applied after all other bonuses). Combos into Frugal + Lossless.',
+                         branch: 'efficiency', pos: { angle: 300, r: 10 }, requires: ['thermal_runaway'], cost: 3000,
+                         applyEffect: (m) => { m.consMul *= 0.5; } },
+
+    // POWER
+    nexus:             { type: 'leveled', name: 'NEXUS',
+                         desc: 'Every tier actively producing gives <b>+5% global production</b> per level (max +30% at L3 × 6 tiers).',
+                         branch: 'power', pos: { angle: 0, r: 9 }, requires: ['symbiosis'],
+                         maxLevel: 3, costForLevel: (L) => L * 500,
+                         applyEffect: (m, L) => { m.nexus += 0.05 * L; } },
+    ascendance:        { type: 'unlock',  name: 'ASCENDANCE',
+                         desc: 'Support buildings count as <b>1.5×</b> their true count. Ultimate Power payoff.',
+                         branch: 'power', pos: { angle: 0, r: 10 }, requires: ['nexus'], cost: 2500,
+                         applyEffect: (m) => { m.supportCountMul = 1.5; } },
   };
 
   // ---------- PATENTS (meta-prestige library) ----------
@@ -502,6 +570,20 @@
     click_part:      { clickAdd: 5,          label: '+5 click power' },
     click_circuit:   { clickAdd: 15,         label: '+15 click power' },
     click_core:      { clickAdd: 50,         label: '+50 click power' },
+
+    // CHALLENGE — big payoffs for hard/hidden runs
+    speed_demon:     { schematicMul: 0.25,   label: '+25% schematics gain' },
+    pacifist:        { prodMul: 0.15,        label: '+15% production' },
+    ascetic:         { schematicMul: 0.20,   label: '+20% schematics gain' },
+    minimalist:      { prodMul: 0.20,        label: '+20% production' },
+    completionist:   { schematicMul: 0.50,   label: '+50% schematics gain' },
+    nirvana:         { prototypeMul: 0.50,   label: '+50% prototype production' },
+    quantum:         { schematicMul: 0.25,   label: '+25% schematics gain' },
+    ghost:           { prototypeMul: 0.25,   label: '+25% prototype production' },
+    master_clicker:  { clickAdd: 100,        label: '+100 click power' },
+    flash_witness:   { prodMul: 0.08,        label: '+8% production' },
+    overlord:        { prodMul: 0.15,        label: '+15% production' },
+    marathoner:      { prodMul: 0.10,        label: '+10% production' },
   };
 
   const ACHIEVEMENTS = {
@@ -545,6 +627,20 @@
     click_part:       { name: 'ARTISAN',           desc: 'Click-earn 10 Part.',                       group: 'scale' },
     click_circuit:    { name: 'SPECIALIST',        desc: 'Click-earn 10 Circuit.',                    group: 'scale' },
     click_core:       { name: 'MAESTRO',           desc: 'Click-earn 10 Core.',                       group: 'scale' },
+
+    // CHALLENGE — hard, hidden, or speedrun-style achievements. Big rewards.
+    speed_demon:      { name: 'SPEED DEMON',       desc: 'Complete a prestige within 5 minutes of starting a run.', group: 'challenge' },
+    pacifist:         { name: 'PACIFIST',          desc: 'Prestige without a single manual click this run.',         group: 'challenge' },
+    ascetic:          { name: 'ASCETIC',           desc: 'Prestige without purchasing any research this run.',       group: 'challenge' },
+    minimalist:       { name: 'MINIMALIST',        desc: 'Prestige while owning fewer than 10 total machines.',      group: 'challenge' },
+    completionist:    { name: 'COMPLETIONIST',     desc: 'Max out every research node simultaneously.',              group: 'challenge' },
+    nirvana:          { name: 'NIRVANA',           desc: 'Max out every Patent.',                                     group: 'challenge' },
+    quantum:          { name: 'QUANTUM',           desc: 'Earn 1B lifetime Schematics.',                              group: 'challenge' },
+    ghost:            { name: 'GHOST',             desc: 'Publish without a single Support built.',                   group: 'challenge' },
+    master_clicker:   { name: 'MASTER CLICKER',    desc: 'Mine 10,000 times (lifetime).',                             group: 'challenge' },
+    flash_witness:    { name: 'FLASH',             desc: 'Witness 10 Flash events.',                                  group: 'challenge' },
+    overlord:         { name: 'OVERLORD',          desc: 'Own 1,000 machines at once.',                               group: 'challenge' },
+    marathoner:       { name: 'MARATHONER',        desc: 'Play for 24 cumulative hours.',                             group: 'challenge' },
   };
 
   // Returns { current, goal } for any achievement so progress bars can render.
@@ -589,6 +685,41 @@
       case 'click_part':      return { current: (m.clicksByRes && m.clicksByRes.part)    || 0,          goal: 10 };
       case 'click_circuit':   return { current: (m.clicksByRes && m.clicksByRes.circuit) || 0,          goal: 10 };
       case 'click_core':      return { current: (m.clicksByRes && m.clicksByRes.core)    || 0,          goal: 10 };
+
+      // CHALLENGE
+      case 'speed_demon':     return { current: (m.fastestPrestigeSec && m.fastestPrestigeSec <= 300) ? 1 : 0, goal: 1 };
+      case 'pacifist':        return { current: m.noClickPrestige    ? 1 : 0, goal: 1 };
+      case 'ascetic':         return { current: m.noResearchPrestige ? 1 : 0, goal: 1 };
+      case 'minimalist':      return { current: m.minMachinePrestige ? 1 : 0, goal: 1 };
+      case 'completionist': {
+        let total = 0, maxed = 0;
+        for (const id in TREE_NODES) {
+          const n = TREE_NODES[id];
+          if (n.type !== 'leveled' && n.type !== 'unlock') continue;
+          total++;
+          const lvl = nodeLevel(id);
+          const max = (n.type === 'leveled') ? (n.maxLevel || 1) : 1;
+          if (lvl >= max) maxed++;
+        }
+        return { current: maxed, goal: total };
+      }
+      case 'nirvana': {
+        let total = 0, maxed = 0;
+        for (const id in PATENTS) {
+          const p = PATENTS[id];
+          total++;
+          const lvl = patentLevel(id);
+          const max = (p.type === 'leveled') ? (p.maxLevel || 1) : 1;
+          if (lvl >= max) maxed++;
+        }
+        return { current: maxed, goal: total };
+      }
+      case 'quantum':         return { current: (m.lifetimeSchematics || 0),                              goal: 1e9 };
+      case 'ghost':           return { current: m.noSupportPublish ? 1 : 0,                                goal: 1 };
+      case 'master_clicker':  return { current: (m.lifetimeClicks || 0),                                  goal: 10000 };
+      case 'flash_witness':   return { current: (m.flashesSeen || 0),                                     goal: 10 };
+      case 'overlord':        return { current: (m.peakMachines || 0),                                    goal: 1000 };
+      case 'marathoner':      return { current: (m.totalPlaytimeMs || 0),                                 goal: 24 * 3600 * 1000 };
     }
     return { current: 0, goal: 1 };
   }
@@ -707,6 +838,20 @@
     power_cell:       '<rect class="glyph" x="-5" y="-3" width="8" height="6"/><rect class="glyph" x="3" y="-1.5" width="2" height="3"/>',
     unity:            '<circle class="glyph" cx="0" cy="0" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle class="glyph" cx="0" cy="0" r="1.5"/>',
     symbiosis:        '<polygon class="glyph" points="-6,0 0,-6 6,0 0,6"/><polygon points="-2.5,0 0,-2.5 2.5,0 0,2.5" fill="var(--bg-deep)"/>',
+
+    // CAPSTONE — unique shapes for each r9/r10 node
+    flash:             '<polygon class="glyph" points="-1,-6 3,-1 0,-1 2,6 -3,1 0,1"/>',
+    momentum_plus:     '<polygon class="glyph" points="-6,3 -2,-3 2,-3 6,3"/><rect class="glyph" x="-0.8" y="-6" width="1.6" height="4"/><rect class="glyph" x="-3" y="-4.8" width="6" height="1.6"/>',
+    triple_strike:     '<polygon class="glyph" points="-6,-4 -3,0 -6,4 -4,4 -1,0 -4,-4"/><polygon class="glyph" points="-2,-4 1,0 -2,4 0,4 3,0 0,-4"/><polygon class="glyph" points="2,-4 5,0 2,4 4,4 7,0 4,-4"/>',
+    click_storm:       '<polygon class="glyph" points="-3,-6 1,-1 -1,-1 3,6 -1,2 1,2"/><circle class="glyph" cx="-5" cy="4" r="1"/><circle class="glyph" cx="5" cy="-4" r="1"/>',
+    compound_interest: '<circle class="glyph" cx="0" cy="0" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="0" y1="0" x2="0" y2="-5" stroke="currentColor" stroke-width="1.5"/><line x1="0" y1="0" x2="4" y2="2" stroke="currentColor" stroke-width="1.5"/>',
+    alchemy:           '<circle class="glyph" cx="-3" cy="0" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><circle class="glyph" cx="3" cy="0" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><polygon class="glyph" points="-1,-1 1,-1 0,1"/>',
+    blueprint_library: '<rect class="glyph" x="-6" y="-5" width="3.5" height="10"/><rect class="glyph" x="-1.5" y="-5" width="3.5" height="10"/><rect class="glyph" x="3" y="-5" width="3" height="10"/>',
+    distributed:       '<circle class="glyph" cx="-4" cy="-3" r="1.8"/><circle class="glyph" cx="4" cy="-3" r="1.8"/><circle class="glyph" cx="-4" cy="3" r="1.8"/><circle class="glyph" cx="4" cy="3" r="1.8"/><circle class="glyph" cx="0" cy="0" r="1.8"/><line x1="-4" y1="-3" x2="4" y2="3" stroke="currentColor" stroke-width="0.8"/><line x1="4" y1="-3" x2="-4" y2="3" stroke="currentColor" stroke-width="0.8"/>',
+    thermal_runaway:   '<polygon class="glyph" points="0,-6 3,0 0,6 -3,0"/><polygon class="glyph" points="-1,-3 1,-3 1,3 -1,3" fill="var(--bg-deep)"/>',
+    zero_point:        '<circle class="glyph" cx="0" cy="0" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle class="glyph" cx="0" cy="0" r="2"/>',
+    nexus:             '<polygon class="glyph" points="0,-6 5,-3 5,3 0,6 -5,3 -5,-3"/><circle cx="0" cy="0" r="2.5" fill="var(--bg-deep)"/><circle class="glyph" cx="0" cy="0" r="1.2"/>',
+    ascendance:        '<polygon class="glyph" points="0,-6 2,-1 6,0 2,1 0,6 -2,1 -6,0 -2,-1"/><circle class="glyph" cx="0" cy="0" r="2"/>',
   };
 
   // ---------- STATE ----------
@@ -758,6 +903,19 @@
         newAchievements: {},
         goldenTicksSeen: 0,
         clickProgress: { ore: 0, ingot: 0, part: 0, circuit: 0, core: 0, prototype: 0 },
+        onboarding: { step: 0, done: false },
+        // Per-run history buckets for the Stats tab graphs. Each sample: { t, ore, ingot, part, circuit, core, proto, score, sch, pat }.
+        history: [],
+        historyLastAt: 0,
+        // Hard-achievement tracking (see ACHIEVEMENTS). Persists across all prestiges.
+        lifetimeClicks: 0,
+        flashesSeen: 0,
+        peakMachines: 0,
+        fastestPrestigeSec: Infinity,
+        noClickPrestige: false,
+        noResearchPrestige: false,
+        minMachinePrestige: false,
+        noSupportPublish: false,
       },
       log: [],
       lastSaveAt: Date.now(),
@@ -1044,6 +1202,250 @@
     if (typeof showToast === 'function') showToast(html, { duration: 6000 });
   }
 
+  // ---------- ONBOARDING ----------
+  // One-time guided tour for first-time players. Steps auto-advance as the
+  // corresponding in-game condition becomes true, so the tutorial never blocks
+  // a fast player and never nags a slow one. Dismissable and replayable from
+  // Settings. The state flag `meta.onboarding.done` locks it off across every
+  // future prestige and publish.
+  const ONBOARD_STEPS = [
+    { id: 'welcome',  title: 'WELCOME TO BLUEPRINT',
+      body: 'Click <b>MINE ORE</b> to extract your first ore. This is the start of a long factory.',
+      target: '[data-mine-res="ore"]',
+      check: () => (state.resources.ore || 0) >= 1 },
+    { id: 'drill',    title: 'AUTOMATE',
+      body: 'Buy a <b>DRILL</b> so ore flows without clicking. Stack them — every drill multiplies output.',
+      target: '[data-machine="drill"]',
+      check: () => (state.machines.drill || 0) >= 1 },
+    { id: 'expand',   title: 'SCALE UP',
+      body: 'Keep buying drills. When you can <b>PRESTIGE</b>, a new tab will appear to spend <b>SCHEMATICS</b>.',
+      target: null,
+      check: () => (state.meta.prestigeCount || 0) >= 1 || (state.meta.schematics || 0) >= 1 },
+    { id: 'research', title: 'SPEND SCHEMATICS',
+      body: 'Open <b>RESEARCH</b>. Schematics unlock new tiers (T2, T3…) and permanent upgrades.',
+      target: '#tab-tree',
+      check: () => state.research.tiersUnlocked[2] || Object.values(state.research.levels || {}).some((v, i) => i > 0 && v > 0) },
+    { id: 'publish',  title: 'THE LONG GAME',
+      body: 'Reach <b>T6 · REFINEMENT</b> to produce <b>PROTOTYPES</b>. Publishing them earns <b>PATENTS</b> — a meta-currency that persists forever.',
+      target: null,
+      check: () => (state.meta.publishCount || 0) >= 1,
+      autoAdvanceMs: 9000 },
+    { id: 'done',     title: "YOU'RE ROLLING",
+      body: 'Tour complete. Re-enable anytime from <b>SETTINGS → ONBOARDING</b>.',
+      target: null,
+      check: () => false,  // never auto-advances; dismissed by button
+      final: true },
+  ];
+
+  let onboardEl = null;
+  let onboardTargetEl = null;
+  let onboardAutoTimer = null;
+
+  function onboardActive() {
+    const o = state.meta.onboarding || {};
+    if (o.done) return false;
+    if (state.settings.tipsMuted) return false;
+    return true;
+  }
+  function currentOnboardStep() {
+    const o = state.meta.onboarding || { step: 0, done: false };
+    return ONBOARD_STEPS[o.step] || null;
+  }
+  function onboardAdvance() {
+    const o = state.meta.onboarding;
+    if (!o || o.done) return;
+    o.step = (o.step || 0) + 1;
+    if (o.step >= ONBOARD_STEPS.length || (ONBOARD_STEPS[o.step] && ONBOARD_STEPS[o.step].final)) {
+      // reach the final step but do not dismiss yet — player clicks "GOT IT"
+      if (o.step >= ONBOARD_STEPS.length) { o.done = true; o.step = ONBOARD_STEPS.length; }
+    }
+    renderOnboarding(true);
+  }
+  function onboardDismiss() {
+    const o = state.meta.onboarding;
+    if (!o) return;
+    o.done = true;
+    if (onboardEl && onboardEl.parentNode) onboardEl.parentNode.removeChild(onboardEl);
+    onboardEl = null;
+    clearOnboardTarget();
+    if (onboardAutoTimer) { clearTimeout(onboardAutoTimer); onboardAutoTimer = null; }
+    save();
+  }
+  function onboardRestart() {
+    state.meta.onboarding = { step: 0, done: false };
+    if (state.settings) state.settings.tipsMuted = false;
+    save();
+    renderOnboarding(true);
+  }
+  function clearOnboardTarget() {
+    if (onboardTargetEl) {
+      onboardTargetEl.classList.remove('onboard-target');
+      onboardTargetEl = null;
+    }
+  }
+  function setOnboardTarget(selector) {
+    clearOnboardTarget();
+    if (!selector) return;
+    const el = document.querySelector(selector);
+    if (!el) return;
+    el.classList.add('onboard-target');
+    onboardTargetEl = el;
+  }
+
+  function renderOnboarding(force) {
+    if (!onboardActive()) {
+      if (onboardEl && onboardEl.parentNode) onboardEl.parentNode.removeChild(onboardEl);
+      onboardEl = null;
+      clearOnboardTarget();
+      return;
+    }
+    const step = currentOnboardStep();
+    if (!step) { onboardDismiss(); return; }
+
+    // Check auto-advance on non-final steps
+    if (!step.final && step.check && step.check()) {
+      onboardAdvance();
+      return;
+    }
+
+    // Build the card if missing or the step changed
+    if (!onboardEl || force || onboardEl.dataset.step !== step.id) {
+      if (onboardEl && onboardEl.parentNode) onboardEl.parentNode.removeChild(onboardEl);
+      onboardEl = document.createElement('div');
+      onboardEl.className = 'onboard-card';
+      onboardEl.dataset.step = step.id;
+      const idx = state.meta.onboarding.step;
+      const total = ONBOARD_STEPS.length;
+      onboardEl.innerHTML = `
+        <div class="ob-head">
+          <span class="ob-step">STEP ${Math.min(idx + 1, total)} / ${total}</span>
+          <button class="ob-skip" aria-label="Skip tutorial">SKIP</button>
+        </div>
+        <div class="ob-title">${step.title}</div>
+        <div class="ob-body">${step.body}</div>
+        <div class="ob-actions">
+          ${step.final ? '<button class="ob-next">GOT IT</button>' : '<button class="ob-next">NEXT</button>'}
+        </div>
+      `;
+      document.body.appendChild(onboardEl);
+      onboardEl.querySelector('.ob-skip').addEventListener('click', onboardDismiss);
+      onboardEl.querySelector('.ob-next').addEventListener('click', () => {
+        if (step.final) onboardDismiss();
+        else onboardAdvance();
+      });
+      setOnboardTarget(step.target);
+      if (onboardAutoTimer) { clearTimeout(onboardAutoTimer); onboardAutoTimer = null; }
+      if (step.autoAdvanceMs) {
+        onboardAutoTimer = setTimeout(() => { if (currentOnboardStep() === step) onboardAdvance(); }, step.autoAdvanceMs);
+      }
+    }
+  }
+
+  // ---------- CELEBRATIONS ----------
+  // Fire-and-forget "big moment" feedback. Stacks a radial screen-flash, a large
+  // banner with the headline number, a burst of particles, brief screen-shake,
+  // and haptic on mobile. Each layer cleans itself up via CSS animation timing.
+  //
+  // The CELEBRATE_PALETTE exists so we can match particle colours to the flash
+  // colour — prestige = gold, publish = cyan, tier = green, milestone = pink.
+  const CELEBRATE_PALETTE = {
+    prestige:  ['#ffd670', '#ffb347', '#fff4c2'],
+    publish:   ['#78c8ff', '#b4e4ff', '#ffffff'],
+    tier:      ['#7effb4', '#b4ffce', '#ffffff'],
+    milestone: ['#ff77b4', '#ffc2dc', '#ffd670'],
+  };
+  const CELEBRATE_KIND_LABEL = {
+    prestige: 'PRESTIGE',
+    publish: 'PUBLISH',
+    tier: 'TIER UNLOCKED',
+    milestone: 'MILESTONE',
+  };
+
+  function celebrate(kind, opts = {}) {
+    kind = kind || 'prestige';
+    const colors = CELEBRATE_PALETTE[kind] || CELEBRATE_PALETTE.prestige;
+
+    // Radial flash
+    const flash = document.createElement('div');
+    flash.className = `celebrate-flash ${kind}`;
+    document.body.appendChild(flash);
+    setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 1700);
+
+    // Centered banner (skip on 'tier' since those happen repeatedly)
+    if (opts.bannerMain || opts.bannerKind || opts.bannerSub) {
+      const banner = document.createElement('div');
+      banner.className = 'celebrate-banner';
+      banner.innerHTML = `
+        <div class="cb-inner">
+          ${opts.bannerKind ? `<div class="cb-kind">${opts.bannerKind}</div>` : ''}
+          ${opts.bannerMain ? `<div class="cb-main">${opts.bannerMain}</div>` : ''}
+          ${opts.bannerSub  ? `<div class="cb-sub">${opts.bannerSub}</div>`   : ''}
+        </div>
+      `;
+      document.body.appendChild(banner);
+      setTimeout(() => { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 2300);
+    }
+
+    // Particle burst — fewer on mobile to stay smooth
+    const isMobile = window.matchMedia('(max-width: 720px)').matches;
+    const particleCount = opts.particles != null ? opts.particles : (isMobile ? 40 : 80);
+    if (particleCount > 0) {
+      const field = document.createElement('div');
+      field.className = 'celebrate-particles';
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < particleCount; i++) {
+        const p = document.createElement('div');
+        p.className = 'cp';
+        const angle = (Math.random() * 360);
+        const dist = 180 + Math.random() * (isMobile ? 260 : 420);
+        const color = colors[(Math.random() * colors.length) | 0];
+        const size = 4 + Math.random() * 8;
+        p.style.setProperty('--a', angle + 'deg');
+        p.style.setProperty('--d', dist + 'px');
+        p.style.background = color;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.animationDelay = (Math.random() * 0.08) + 's';
+        frag.appendChild(p);
+      }
+      field.appendChild(frag);
+      document.body.appendChild(field);
+      setTimeout(() => { if (field.parentNode) field.parentNode.removeChild(field); }, 1600);
+    }
+
+    // Screen shake on the #app container
+    if (!opts.skipShake) {
+      const app = document.getElementById('app');
+      if (app) {
+        app.classList.remove('screen-shake');
+        void app.offsetWidth;
+        app.classList.add('screen-shake');
+        setTimeout(() => app.classList.remove('screen-shake'), 650);
+      }
+    }
+
+    haptic(opts.hapticMs || 40);
+  }
+
+  // Check for milestone triggers after gain events. Returns the banner text to
+  // fire, or null if no milestone was crossed this call. Thresholds are
+  // log-spaced so the game drops one every couple of orders of magnitude.
+  const SCHEMATIC_MILESTONES = [100, 1000, 10000, 100000, 1000000, 10000000, 1000000000];
+  const PATENT_MILESTONES = [10, 100, 1000];
+  function checkMilestones(before, after, kind) {
+    const list = kind === 'schematics' ? SCHEMATIC_MILESTONES : PATENT_MILESTONES;
+    for (const t of list) {
+      if (before < t && after >= t) {
+        return {
+          bannerKind: kind === 'schematics' ? `${fmt(t)} SCHEMATICS` : `${fmt(t)} PATENTS`,
+          bannerMain: 'MILESTONE',
+          bannerSub: kind === 'schematics' ? 'lifetime' : 'lifetime',
+        };
+      }
+    }
+    return null;
+  }
+
   // ---------- FORMATTERS ----------
   const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
   function fmt(n) {
@@ -1105,6 +1507,13 @@
     state.meta.schematics -= tierUnlockCost(tierId);
     state.research.tiersUnlocked[tierId] = true;
     audio.tierUnlock();
+    const tierName = (TIERS.find(t => t.id === tierId) || {}).name || `T${tierId}`;
+    celebrate('tier', {
+      bannerKind: 'TIER UNLOCKED',
+      bannerMain: `T${tierId} · ${tierName}`,
+      particles: 50,
+      skipShake: true,
+    });
     if (tierId === 2) hint('post_t2', '<b>TIP</b> — T2 machines consume Ore. Build enough Drills to keep them fed.');
     prevUnlockSig = '';
     return true;
@@ -1250,6 +1659,11 @@
     state.meta.totalPatents += gained;
     state.meta.publishCount += 1;
 
+    // GHOST — no supports at publish time counts
+    let supportsCount = 0;
+    for (const id in state.supports) supportsCount += state.supports[id] || 0;
+    if (supportsCount === 0) state.meta.noSupportPublish = true;
+
     // WIPE: everything except patents + patent levels + player prefs + lifetime stats.
     state.resources = emptyResources();
     state.machines = emptyMachines();
@@ -1271,6 +1685,24 @@
     invalidateRM();
     prevUnlockSig = '';
     audio.publish();
+    const patentsBefore = (state.meta.totalPatents || 0) - gained;
+    const patentsAfter = state.meta.totalPatents || 0;
+    if (state.meta.publishCount === 1) {
+      celebrate('publish', {
+        bannerKind: 'FIRST PUBLISH',
+        bannerMain: `+${fmt(gained)}`,
+        bannerSub: 'Patents earned · Mastery unlocked',
+        particles: 120,
+      });
+    } else {
+      celebrate('publish', {
+        bannerKind: 'PUBLISHED',
+        bannerMain: `+${fmt(gained)}`,
+        bannerSub: 'Patents',
+      });
+    }
+    const ms = checkMilestones(patentsBefore, patentsAfter, 'patents');
+    if (ms) setTimeout(() => celebrate('milestone', ms), 1400);
     save();
     rebuildAll();
     setTab('mastery');
@@ -1329,6 +1761,16 @@
       blueprintMemory: false,
       chainReaction: false,
       symbiosis: 0,
+      // capstone (r9–r10) fields
+      flash: false,
+      momentumCapAdd: 0,
+      clickStorm: false,
+      compoundInterest: false,
+      alchemy: false,
+      blueprintPct: 0.80,
+      distributed: 0,
+      nexus: 0,
+      supportCountMul: 1,
     };
     for (const id in TREE_NODES) {
       const lvl = nodeLevel(id);
@@ -1364,20 +1806,23 @@
   function globalProdMul(totalMachines) {
     const r = rm();
     let mul = r.prodMul;
+    const sMul = r.supportCountMul || 1;
     for (const id in SUPPORTS) {
-      const count = state.supports[id] || 0;
+      const count = (state.supports[id] || 0) * sMul;
       const eff = (SUPPORTS[id].effect.prodMul || 0) * r.powerBoost;
       mul *= (1 + eff * count);
     }
-    const momentumBonus = Math.min(MOMENTUM_CAP, (totalMachines || 0) * r.momentum);
+    const cap = MOMENTUM_CAP + (r.momentumCapAdd || 0);
+    const momentumBonus = Math.min(cap, (totalMachines || 0) * r.momentum);
     mul *= (1 + momentumBonus);
     return mul;
   }
   function globalConsMul() {
     const r = rm();
     let mul = r.consMul;
+    const sMul = r.supportCountMul || 1;
     for (const id in SUPPORTS) {
-      const count = state.supports[id] || 0;
+      const count = (state.supports[id] || 0) * sMul;
       const eff = (SUPPORTS[id].effect.consMul || 0) * r.powerBoost;
       mul *= Math.max(0.05, 1 + eff * count);
     }
@@ -1506,6 +1951,70 @@
       if (uniq > 0) prodMul *= (1 + r.symbiosis * uniq);
     }
 
+    // ◆ NEXUS — +5%/lvl per actively-producing tier (up to 6)
+    if (r.nexus > 0) {
+      let activeTiers = 0;
+      for (let t = 1; t <= 6; t++) {
+        for (const id in MACHINES) {
+          if (MACHINES[id].tier === t && (state.machines[id] || 0) > 0) { activeTiers++; break; }
+        }
+      }
+      if (activeTiers > 0) prodMul *= (1 + r.nexus * activeTiers);
+    }
+
+    // ◆ CLICK STORM — active if 10 clicks landed within any 3s window recently
+    if (r.clickStorm && runtime.clickStormEndAt && Date.now() < runtime.clickStormEndAt) {
+      prodMul *= 2;
+    }
+
+    // ◆ COMPOUND INTEREST — yield-only bonus scales with current run duration
+    let compoundYieldBonus = 1;
+    if (r.compoundInterest) {
+      const runMin = (Date.now() - (state.meta.currentRunStartAt || Date.now())) / 60000;
+      compoundYieldBonus = 1 + Math.min(2.0, runMin * 0.02); // cap +200%
+    }
+
+    // ◆ FLASH — independent random-tier burst every 30s, 8s duration, ×5
+    if (r.flash) {
+      if (!runtime.flash) runtime.flash = { active: false, tierId: null, endAt: 0, nextAt: Date.now() + 30000 };
+      const f = runtime.flash;
+      const now = Date.now();
+      if (f.active && now >= f.endAt) { f.active = false; f.nextAt = now + 30000; }
+      else if (!f.active && now >= f.nextAt) {
+        f.tierId = 1 + Math.floor(Math.random() * 6);
+        f.active = true; f.endAt = now + 8000;
+        state.meta.flashesSeen = (state.meta.flashesSeen || 0) + 1;
+        log(`⚡ FLASH · T${f.tierId} surges ×5 for 8s`);
+        audio.goldenTick();
+      }
+    }
+
+    // ◆ ALCHEMY — every 5s, 1% of top unlocked resource converts up one tier
+    if (r.alchemy) {
+      if (!runtime.alchemyNextAt) runtime.alchemyNextAt = Date.now() + 5000;
+      if (Date.now() >= runtime.alchemyNextAt) {
+        runtime.alchemyNextAt = Date.now() + 5000;
+        const chain = ['ore', 'ingot', 'part', 'circuit', 'core', 'prototype'];
+        // find the largest qty resource whose next tier up is also unlocked
+        let bestRes = null, bestQty = 0;
+        for (let i = 0; i < chain.length - 1; i++) {
+          const r1 = chain[i], r2 = chain[i+1];
+          if (!resourceVisible(r2)) continue;
+          const q = state.resources[r1] || 0;
+          if (q > bestQty) { bestQty = q; bestRes = r1; }
+        }
+        if (bestRes) {
+          const idx = chain.indexOf(bestRes);
+          const up = chain[idx + 1];
+          const delta = bestQty * 0.01;
+          state.resources[bestRes] = Math.max(0, (state.resources[bestRes] || 0) - delta);
+          state.resources[up] = (state.resources[up] || 0) + delta;
+          state.meta.totalProduced[up] = (state.meta.totalProduced[up] || 0) + delta;
+          state.meta.lifetimeProduced[up] = (state.meta.lifetimeProduced[up] || 0) + delta;
+        }
+      }
+    }
+
     // ◆ GOLDEN TICK — scheduler
     if (r.goldenTick) {
       if (!runtime.goldenTick) runtime.goldenTick = { active: false, tierId: null, endAt: 0, nextAt: Date.now() + 60000 };
@@ -1573,9 +2082,9 @@
       }
     }
 
-    // free resources from Yield
+    // free resources from Yield (Compound Interest scales these with run duration)
     for (const res in r.freeRes) {
-      const ratePerSec = r.freeRes[res];
+      const ratePerSec = r.freeRes[res] * compoundYieldBonus;
       if (ratePerSec > 0) {
         const amt = ratePerSec * dt;
         state.resources[res] = (state.resources[res] || 0) + amt;
@@ -1617,12 +2126,21 @@
       }
 
       if (produceRatio > 0) {
-        // Per-machine multipliers: Golden Tick surge, Rising Tide lower-tier bonus
+        // Per-machine multipliers: Golden Tick surge, Flash burst, Rising Tide lower-tier bonus, Distributed same-tier bonus
         const goldenMul = (runtime.goldenTick && runtime.goldenTick.active && runtime.goldenTick.tierId === m.tier) ? 10 : 1;
+        const flashMul = (runtime.flash && runtime.flash.active && runtime.flash.tierId === m.tier) ? 5 : 1;
         const tideMul = risingTideOn ? (risingTideBonus[m.tier] || 1) : 1;
+        let distributedMul = 1;
+        if (r.distributed > 0) {
+          let sameTier = 0;
+          for (const oid in MACHINES) {
+            if (oid !== id && MACHINES[oid].tier === m.tier) sameTier += (state.machines[oid] || 0);
+          }
+          distributedMul = 1 + r.distributed * sameTier;
+        }
         for (const res in m.produces) {
           const extra = (res === 'prototype') ? r.prototypeMul : 1;
-          const rate = m.produces[res] * count * produceRatio * prodMul * extra * goldenMul * tideMul;
+          const rate = m.produces[res] * count * produceRatio * prodMul * extra * goldenMul * flashMul * tideMul * distributedMul;
           const amt = rate * dt;
           state.resources[res] += amt;
           state.meta.totalProduced[res] = (state.meta.totalProduced[res] || 0) + amt;
@@ -1648,6 +2166,32 @@
     }
 
     state.meta.totalPlaytimeMs += dt * 1000;
+
+    // OVERLORD achievement — track highest machine-count ever held
+    if (totalMachines > (state.meta.peakMachines || 0)) state.meta.peakMachines = totalMachines;
+
+    // HISTORY SAMPLER — record a small snapshot every 15s so the Stats tab can
+    // plot curves. Ring-buffered at 240 samples (~1h of wall-clock data).
+    const now = Date.now();
+    if (now - (state.meta.historyLastAt || 0) >= 15000) {
+      state.meta.historyLastAt = now;
+      if (!Array.isArray(state.meta.history)) state.meta.history = [];
+      const h = state.meta.history;
+      const res = state.resources;
+      h.push({
+        t: now,
+        o: res.ore || 0,
+        i: res.ingot || 0,
+        p: res.part || 0,
+        c: res.circuit || 0,
+        k: res.core || 0,
+        r: res.prototype || 0,
+        s: state.meta.schematics || 0,
+        a: state.meta.patents || 0,
+        pr: runtime.totalProdPerSec || 0,
+      });
+      while (h.length > 240) h.shift();
+    }
 
     // ◆ AUTO-PRESTIGE
     if (r.autoPrestige && state.settings.autoPrestige && state.settings.autoPrestige.enabled) {
@@ -1719,6 +2263,7 @@
     }
 
     state.meta.totalClicks = (state.meta.totalClicks || 0) + 1;
+    state.meta.lifetimeClicks = (state.meta.lifetimeClicks || 0) + 1;
     if (produced > 0) {
       state.resources[res] = (state.resources[res] || 0) + produced;
       state.meta.totalProduced[res] = (state.meta.totalProduced[res] || 0) + produced;
@@ -1734,6 +2279,20 @@
     audio.mine(tierIdx >= 0 ? tierIdx : 0);
     if (crit) audio.crit();
     if (crit && r.critCascade) runtime.critCascadeEndAt = Date.now() + 3000;
+
+    // ◆ CLICK STORM — 10 clicks within 3s triggers 5s x2 prod burst
+    if (r.clickStorm) {
+      runtime.clickStormTimes = runtime.clickStormTimes || [];
+      const cutoff = Date.now() - 3000;
+      runtime.clickStormTimes = runtime.clickStormTimes.filter(t => t >= cutoff);
+      runtime.clickStormTimes.push(Date.now());
+      if (runtime.clickStormTimes.length >= 10 && (!runtime.clickStormEndAt || Date.now() > runtime.clickStormEndAt)) {
+        runtime.clickStormEndAt = Date.now() + 5000;
+        runtime.clickStormTimes = [];
+        log('⚡ CLICK STORM · ×2 production for 5s');
+        audio.goldenTick();
+      }
+    }
     return true;
   }
   function clickMine() { clickResource('ore'); }
@@ -1766,6 +2325,17 @@
     state.meta.prestigeCount += 1;
     state.meta.lifetimePrestiges = (state.meta.lifetimePrestiges || 0) + 1;
 
+    // ---- Challenge-achievement snapshots (computed pre-reset, persist across the wipe) ----
+    const runSec = Math.max(1, Math.floor((Date.now() - (state.meta.currentRunStartAt || Date.now())) / 1000));
+    if (!isFinite(state.meta.fastestPrestigeSec) || runSec < state.meta.fastestPrestigeSec) state.meta.fastestPrestigeSec = runSec;
+    if ((state.meta.totalClicks || 0) === 0) state.meta.noClickPrestige = true;
+    let researchOwnedCount = 0;
+    for (const k in state.research.levels) if (k !== 'origin' && state.research.levels[k] > 0) researchOwnedCount++;
+    if (researchOwnedCount === 0) state.meta.noResearchPrestige = true;
+    let totalMachinesAtPrestige = 0;
+    for (const id in state.machines) totalMachinesAtPrestige += state.machines[id] || 0;
+    if (totalMachinesAtPrestige > 0 && totalMachinesAtPrestige < 10) state.meta.minMachinePrestige = true;
+
     // BLUEPRINT MEMORY: snapshot machine counts before reset
     const memorySnapshot = rm().blueprintMemory ? { ...state.machines } : null;
 
@@ -1782,10 +2352,11 @@
 
     applyStartupBonuses();
 
-    // BLUEPRINT MEMORY: restore 80% of previous machine counts for free
+    // BLUEPRINT MEMORY: restore a pct of previous machine counts for free
     if (memorySnapshot) {
+      const pct = rm().blueprintPct || 0.8;
       for (const id in memorySnapshot) {
-        const restored = Math.floor((memorySnapshot[id] || 0) * 0.8);
+        const restored = Math.floor((memorySnapshot[id] || 0) * pct);
         if (restored > 0) state.machines[id] = Math.max(state.machines[id] || 0, restored);
       }
     }
@@ -1794,8 +2365,27 @@
     invalidateRM();
     prevUnlockSig = '';
     audio.prestige();
+    const prestigeBefore = (state.meta.lifetimeSchematics || 0) - gained;
+    const prestigeAfter = state.meta.lifetimeSchematics || 0;
+    // Firsts, milestones, and normal prestige all get the celebrate treatment.
     if (state.meta.prestigeCount === 1) {
+      celebrate('prestige', {
+        bannerKind: 'FIRST PRESTIGE',
+        bannerMain: `+${fmt(gained)}`,
+        bannerSub: 'Schematics earned · Research unlocked',
+        particles: 100,
+      });
       hint('post_first_prestige', '<b>TIP</b> — open the <b>RESEARCH</b> tab to spend Schematics on tier unlocks.');
+    } else {
+      celebrate('prestige', {
+        bannerKind: 'PRESTIGE',
+        bannerMain: `+${fmt(gained)}`,
+        bannerSub: 'Schematics',
+      });
+    }
+    const ms = checkMilestones(prestigeBefore, prestigeAfter, 'schematics');
+    if (ms) {
+      setTimeout(() => celebrate('milestone', ms), 1400);
     }
     save();
     rebuildAll();
@@ -1854,6 +2444,24 @@
       state.meta.newAchievements = state.meta.newAchievements || {};
       if (state.meta.goldenTicksSeen == null) state.meta.goldenTicksSeen = 0;
       state.meta.clickProgress = Object.assign({ ore: 0, ingot: 0, part: 0, circuit: 0, core: 0, prototype: 0 }, state.meta.clickProgress || {});
+      state.meta.onboarding = Object.assign({ step: 0, done: false }, state.meta.onboarding || {});
+      // Migration: any existing save with real progress skips the tutorial entirely.
+      if (!state.meta.onboarding.done) {
+        const alreadyPlayed = (state.meta.prestigeCount || 0) > 0
+          || (state.meta.publishCount || 0) > 0
+          || (state.meta.lifetimeSchematics || 0) > 0;
+        if (alreadyPlayed) state.meta.onboarding.done = true;
+      }
+      state.meta.history = Array.isArray(state.meta.history) ? state.meta.history : [];
+      if (state.meta.lifetimeClicks == null) state.meta.lifetimeClicks = state.meta.totalClicks || 0;
+      if (state.meta.flashesSeen == null) state.meta.flashesSeen = 0;
+      if (state.meta.peakMachines == null) state.meta.peakMachines = 0;
+      if (state.meta.fastestPrestigeSec == null) state.meta.fastestPrestigeSec = Infinity;
+      if (!isFinite(state.meta.fastestPrestigeSec)) state.meta.fastestPrestigeSec = Infinity;
+      if (state.meta.noClickPrestige == null) state.meta.noClickPrestige = false;
+      if (state.meta.noResearchPrestige == null) state.meta.noResearchPrestige = false;
+      if (state.meta.minMachinePrestige == null) state.meta.minMachinePrestige = false;
+      if (state.meta.noSupportPublish == null) state.meta.noSupportPublish = false;
       state.meta = Object.assign(freshState().meta, state.meta || {});
       state.meta.totalProduced = Object.assign(emptyResources(), state.meta.totalProduced || {});
       state.meta.lifetimeProduced = Object.assign(emptyResources(), state.meta.lifetimeProduced || {});
@@ -2370,13 +2978,13 @@
     if (sig === prevAchSig) return;
     prevAchSig = sig;
 
-    const groups = { progress: [], meta: [], scale: [], special: [] };
+    const groups = { progress: [], meta: [], scale: [], special: [], challenge: [] };
     for (const id in ACHIEVEMENTS) {
       const a = ACHIEVEMENTS[id];
-      groups[a.group || 'special'].push({ id, ...a });
+      (groups[a.group || 'special'] || (groups[a.group] = [])).push({ id, ...a });
     }
-    const groupOrder = ['progress', 'meta', 'scale', 'special'];
-    const groupLabels = { progress: 'PROGRESS', meta: 'PRESTIGE & PUBLISH', scale: 'SCALE', special: 'SPECIAL' };
+    const groupOrder = ['progress', 'meta', 'scale', 'special', 'challenge'];
+    const groupLabels = { progress: 'PROGRESS', meta: 'PRESTIGE & PUBLISH', scale: 'SCALE', special: 'SPECIAL', challenge: 'CHALLENGE' };
     dom.achBody.innerHTML = groupOrder.map(g => `
       <div class="ach-group">
         <div class="ach-group-label">${groupLabels[g]}</div>
@@ -2524,7 +3132,7 @@
   // Each branch becomes a horizontal "assembly track" — 8 tier slots laid out
   // left→right, with a backbone line running through them and a progress
   // counter at the end. Read-at-a-glance layout that scales cleanly to mobile.
-  const RAILS_TIERS = 8;
+  const RAILS_TIERS = 10;
   const BRANCH_DISPLAY_ORDER = ['speed', 'logistics', 'yield', 'automation', 'efficiency', 'power'];
 
   function nodeState(id) {
@@ -3141,10 +3749,117 @@
   }
 
   // ---------- STATS VIEW ----------
+  // Build an SVG multi-line chart from history samples. log-scale y for
+  // quantities that span many orders of magnitude. Very small and dependency-
+  // free — custom viewBox stretches to fit whatever aspect the container has.
+  function buildChart(opts) {
+    const { title, series, samples, yLog, width = 720, height = 180, sub = '' } = opts;
+    if (!samples || samples.length < 2) {
+      return `<div class="stats-chart"><div class="chart-head"><h4>${title}</h4>${sub ? `<span class="chart-sub">${sub}</span>` : ''}</div><div class="chart-empty">Collecting data — checks back in a minute.</div></div>`;
+    }
+    const n = samples.length;
+    const tFirst = samples[0].t, tLast = samples[n - 1].t;
+    const tSpan = Math.max(1, tLast - tFirst);
+
+    // Y bounds: max over all series, min (for log) clamped at 1
+    let yMin = Infinity, yMax = -Infinity;
+    for (const s of series) {
+      for (let i = 0; i < n; i++) {
+        const v = s.get(samples[i]);
+        if (v == null || !isFinite(v)) continue;
+        if (v < yMin) yMin = v;
+        if (v > yMax) yMax = v;
+      }
+    }
+    if (!isFinite(yMax) || yMax <= 0) yMax = 1;
+    if (!isFinite(yMin)) yMin = 0;
+    if (yLog) { yMin = 1; yMax = Math.max(10, yMax); }
+
+    const pad = { l: 44, r: 10, t: 6, b: 22 };
+    const plotW = width - pad.l - pad.r;
+    const plotH = height - pad.t - pad.b;
+
+    const xAt = (t) => pad.l + ((t - tFirst) / tSpan) * plotW;
+    const yAt = (v) => {
+      if (yLog) {
+        const lv = Math.max(Math.log10(Math.max(1, v)), 0);
+        const hi = Math.log10(yMax);
+        return pad.t + plotH - (lv / (hi || 1)) * plotH;
+      }
+      return pad.t + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH;
+    };
+
+    // Path per series
+    const paths = series.map(s => {
+      let d = '';
+      let first = true;
+      for (let i = 0; i < n; i++) {
+        const v = s.get(samples[i]);
+        if (v == null || !isFinite(v)) continue;
+        const x = xAt(samples[i].t), y = yAt(v);
+        d += (first ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+        first = false;
+      }
+      return `<path d="${d}" stroke="${s.color}" stroke-width="1.8" fill="none" opacity="0.95"/>`;
+    }).join('');
+
+    // Y-axis labels — 4 gridlines
+    let gridLines = '';
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + (plotH * i) / 4;
+      let label;
+      if (yLog) {
+        const lv = Math.log10(yMax) * (1 - i / 4);
+        label = fmt(Math.pow(10, lv));
+      } else {
+        const v = yMax - (yMax - yMin) * (i / 4);
+        label = fmt(v);
+      }
+      gridLines += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${width - pad.r}" y2="${y.toFixed(1)}" stroke="rgba(74,159,207,0.08)" stroke-width="1"/>`;
+      gridLines += `<text x="${pad.l - 6}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" fill="rgba(176,208,228,0.55)" font-size="10" font-family="Consolas, monospace">${label}</text>`;
+    }
+
+    // Time axis — start / middle / end labels relative to now
+    const ago = (ms) => {
+      const s = Math.round(ms / 1000);
+      if (s < 60) return s + 's';
+      const m = Math.round(s / 60);
+      if (m < 60) return m + 'm';
+      const h = (m / 60);
+      return h.toFixed(1) + 'h';
+    };
+    const now = Date.now();
+    const xLabels = [
+      { t: tFirst, label: ago(now - tFirst) + ' ago' },
+      { t: tFirst + tSpan / 2, label: ago(now - (tFirst + tSpan/2)) + ' ago' },
+      { t: tLast, label: 'now' },
+    ].map(l => `<text x="${xAt(l.t).toFixed(1)}" y="${height - 6}" text-anchor="middle" fill="rgba(176,208,228,0.55)" font-size="10" font-family="Consolas, monospace">${l.label}</text>`).join('');
+
+    const legend = series.map(s =>
+      `<span class="chart-legend-item"><span class="chart-swatch" style="background:${s.color}"></span>${s.name}</span>`
+    ).join('');
+
+    return `
+      <div class="stats-chart">
+        <div class="chart-head">
+          <h4>${title}</h4>
+          ${sub ? `<span class="chart-sub">${sub}</span>` : ''}
+          <div class="chart-legend">${legend}</div>
+        </div>
+        <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" class="chart-svg">
+          ${gridLines}
+          ${paths}
+          ${xLabels}
+        </svg>
+      </div>
+    `;
+  }
+
   function renderStats() {
     if (!statsBodyEl) return;
     const m = state.meta;
     const run = m.currentRunStartAt ? (Date.now() - m.currentRunStartAt) : 0;
+    const samples = Array.isArray(m.history) ? m.history : [];
 
     let machineRows = '';
     let totalMachines = 0;
@@ -3181,7 +3896,46 @@
     let earnedCount = 0, totalCount = 0;
     for (const id in ACHIEVEMENTS) { totalCount++; if (achMap[id]) earnedCount++; }
 
+    const chartResources = buildChart({
+      title: 'RESOURCES · LAST HOUR',
+      sub: 'log scale',
+      yLog: true,
+      samples,
+      series: [
+        { name: 'ORE',       color: '#b7d4e3', get: s => s.o },
+        { name: 'INGOT',     color: '#f3b45a', get: s => s.i },
+        { name: 'PART',      color: '#7ed2c8', get: s => s.p },
+        { name: 'CIRCUIT',   color: '#a89fff', get: s => s.c },
+        { name: 'CORE',      color: '#ffd670', get: s => s.k },
+        { name: 'PROTOTYPE', color: '#ff9ad1', get: s => s.r },
+      ],
+    });
+    const chartProd = buildChart({
+      title: 'TOTAL PRODUCTION /s',
+      sub: 'log scale',
+      yLog: true,
+      samples,
+      series: [
+        { name: 'PROD/s', color: '#4a9fcf', get: s => s.pr || 0 },
+      ],
+    });
+    const chartMeta = buildChart({
+      title: 'SCHEMATICS & PATENTS',
+      sub: 'current held',
+      samples,
+      series: [
+        { name: 'SCHEMATICS', color: '#ffd670', get: s => s.s || 0 },
+        { name: 'PATENTS',    color: '#78c8ff', get: s => s.a || 0 },
+      ],
+    });
+
     statsBodyEl.innerHTML = `
+      <div class="stats-block">
+        <h3>◆ TREND</h3>
+        ${chartResources}
+        ${chartProd}
+        ${chartMeta}
+      </div>
       <div class="stats-block">
         <h3>◆ ALL-TIME</h3>
         <div class="rows">
@@ -3428,6 +4182,10 @@
           <span class="label">RESET ALL HINTS</span>
           <button class="btn" id="set-reset-hints">CLEAR</button>
         </div>
+        <div class="settings-row">
+          <span class="label">REPLAY TUTORIAL</span>
+          <button class="btn" id="set-replay-tutorial">REPLAY</button>
+        </div>
       </div>
       <div class="settings-group">
         <h4>SAVE &amp; SYSTEM</h4>
@@ -3491,6 +4249,10 @@
     bg.querySelector('#set-reset-hints').addEventListener('click', () => {
       s.hintsShown = {};
       toast('<b>Hints cleared.</b> They will appear again as you play.');
+    });
+    bg.querySelector('#set-replay-tutorial').addEventListener('click', () => {
+      bg.remove();
+      onboardRestart();
     });
     bg.querySelector('#set-tips-on').addEventListener('click',  () => { s.tipsMuted = false; save(); showSettings(); bg.remove(); });
     bg.querySelector('#set-tips-off').addEventListener('click', () => { s.tipsMuted = true;  save(); showSettings(); bg.remove(); });
@@ -3639,6 +4401,7 @@
       renderMastery();
       lastMasteryRender = Date.now();
     }
+    renderOnboarding();
   }
   let lastStatsRender = 0;
   let lastMasteryRender = 0;

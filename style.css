@@ -520,6 +520,54 @@ body {
 .stats-block .r .v.hi { color: var(--accent); }
 .stats-block .r .v.ok { color: var(--ok); }
 
+/* Charts inside the TREND stats block. */
+.stats-chart {
+  background: var(--bg-dim);
+  border: 1px solid var(--line-dim);
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+.stats-chart:first-child { margin-top: 0; }
+.stats-chart .chart-head {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.stats-chart h4 {
+  font-size: 10px; letter-spacing: 2px; color: var(--text);
+  margin: 0;
+}
+.stats-chart .chart-sub {
+  font-size: 9px; letter-spacing: 1.5px; color: var(--text-dim);
+  text-transform: uppercase;
+}
+.stats-chart .chart-legend {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-left: auto;
+  font-size: 10px; letter-spacing: 1px;
+  color: var(--text-dim);
+}
+.stats-chart .chart-legend-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono);
+}
+.stats-chart .chart-swatch {
+  display: inline-block; width: 10px; height: 2px;
+}
+.stats-chart .chart-svg {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 1;
+  display: block;
+}
+.stats-chart .chart-empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 11px; letter-spacing: 1.5px;
+}
+
 /* ========== ACHIEVEMENTS TAB ========== */
 .achievements-view {
   display: block !important;
@@ -802,6 +850,174 @@ body {
 .toast.ok b { color: var(--ok); }
 @keyframes toast-in  { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes toast-out { to   { opacity: 0; transform: translateX(16px); } }
+
+/* ========== ONBOARDING ========== */
+.onboard-card {
+  position: fixed;
+  left: 50%; bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 90;
+  width: min(520px, calc(100vw - 32px));
+  background: linear-gradient(180deg, rgba(18, 70, 92, 0.98), rgba(8, 30, 42, 0.98));
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(255, 214, 112, 0.15), 0 18px 40px rgba(0,0,0,0.6);
+  padding: 14px 18px 16px;
+  font-family: var(--font-ui);
+  animation: ob-in 0.35s cubic-bezier(.2,.9,.3,1);
+}
+.onboard-card .ob-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.onboard-card .ob-step {
+  font-size: 10px; letter-spacing: 2px;
+  color: var(--accent); font-weight: 700;
+}
+.onboard-card .ob-skip {
+  background: transparent; border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 10px; letter-spacing: 1.5px;
+  padding: 4px 8px; cursor: pointer;
+}
+.onboard-card .ob-skip:hover { color: var(--text); border-color: var(--text-dim); }
+.onboard-card .ob-title {
+  font-size: 14px; letter-spacing: 2px;
+  color: var(--white); font-weight: 700;
+  margin-bottom: 6px;
+}
+.onboard-card .ob-body {
+  font-size: 12px; color: var(--text);
+  line-height: 1.55; margin-bottom: 12px;
+}
+.onboard-card .ob-body b { color: var(--accent); }
+.onboard-card .ob-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.onboard-card .ob-next {
+  background: var(--accent); color: #1b1200;
+  border: 0; padding: 8px 18px;
+  font-family: var(--font-ui);
+  font-size: 11px; letter-spacing: 2px; font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.onboard-card .ob-next:hover { filter: brightness(1.1); }
+@keyframes ob-in {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to   { opacity: 1; transform: translate(-50%, 0);    }
+}
+/* Pulsing outline on the element the current step is pointing at. */
+.onboard-target {
+  position: relative;
+  animation: ob-target-pulse 1.4s ease-in-out infinite;
+  z-index: 5;
+}
+@keyframes ob-target-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255, 214, 112, 0.5); }
+  50%      { box-shadow: 0 0 0 4px var(--accent), 0 0 28px rgba(255, 214, 112, 0.8); }
+}
+@media (max-width: 720px) {
+  .onboard-card { bottom: 16px; padding: 12px 14px 14px; }
+  .onboard-card .ob-title { font-size: 12px; letter-spacing: 1.5px; }
+  .onboard-card .ob-body  { font-size: 11px; }
+}
+
+/* ========== CELEBRATIONS (big-moment feedback) ========== */
+/* Full-screen radial flash used for prestige / publish / tier-up / milestone. */
+.celebrate-flash {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 120;
+  opacity: 0;
+  animation: cel-flash 1.6s ease-out forwards;
+}
+.celebrate-flash.prestige {
+  background: radial-gradient(circle at center, rgba(255, 214, 112, 0.65) 0%, rgba(255, 214, 112, 0) 60%);
+}
+.celebrate-flash.publish {
+  background: radial-gradient(circle at center, rgba(120, 200, 255, 0.7) 0%, rgba(120, 200, 255, 0) 60%);
+}
+.celebrate-flash.tier {
+  background: radial-gradient(circle at center, rgba(128, 255, 180, 0.55) 0%, rgba(128, 255, 180, 0) 55%);
+}
+.celebrate-flash.milestone {
+  background: radial-gradient(circle at center, rgba(255, 120, 180, 0.55) 0%, rgba(255, 120, 180, 0) 60%);
+}
+@keyframes cel-flash {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Big centred banner text. */
+.celebrate-banner {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 121;
+  font-family: var(--font-ui);
+  animation: cel-banner 2.2s ease-out forwards;
+}
+.celebrate-banner .cb-inner {
+  text-align: center;
+  text-transform: uppercase;
+}
+.celebrate-banner .cb-kind {
+  font-size: 12px; letter-spacing: 5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+  opacity: 0.9;
+}
+.celebrate-banner .cb-main {
+  font-size: 48px; letter-spacing: 4px;
+  color: var(--white); font-weight: 700;
+  text-shadow: 0 0 20px rgba(255, 214, 112, 0.8),
+               0 0 40px rgba(255, 214, 112, 0.4);
+}
+.celebrate-banner .cb-sub {
+  font-size: 14px; letter-spacing: 3px;
+  color: var(--text); margin-top: 10px;
+}
+@keyframes cel-banner {
+  0%   { opacity: 0; transform: scale(0.7); }
+  15%  { opacity: 1; transform: scale(1);   }
+  75%  { opacity: 1; transform: scale(1);   }
+  100% { opacity: 0; transform: scale(1.15);}
+}
+
+/* Particle field — one burst of N divs flying outward. */
+.celebrate-particles {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 122;
+  overflow: hidden;
+}
+.celebrate-particles .cp {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 8px; height: 8px;
+  border-radius: 1px;
+  background: var(--accent);
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: cp-fly 1.4s cubic-bezier(.15,.8,.25,1) forwards;
+}
+@keyframes cp-fly {
+  0%   { transform: translate(-50%, -50%) rotate(var(--a)) translateX(0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d)) rotate(720deg); opacity: 0; }
+}
+
+/* Screen-shake — applied to #app for a brief window. */
+.screen-shake {
+  animation: scr-shake 0.55s cubic-bezier(.36,.07,.19,.97);
+}
+@keyframes scr-shake {
+  10%, 90%  { transform: translate(-1px, 0);  }
+  20%, 80%  { transform: translate(2px, 0);   }
+  30%, 50%, 70% { transform: translate(-3px, 0); }
+  40%, 60%  { transform: translate(3px, 0);   }
+}
+
+@media (max-width: 720px) {
+  .celebrate-banner .cb-main { font-size: 32px; letter-spacing: 3px; }
+  .celebrate-banner .cb-sub  { font-size: 12px; }
+}
 
 .factory {
   padding: 0;
@@ -1585,7 +1801,7 @@ body {
 .rails-ringbar .rb-right { text-align: right; }
 .rails-ringbar .rb-tiers {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   text-align: center;
 }
 .rails-ringbar .rb-col {
@@ -1633,11 +1849,11 @@ body {
   white-space: nowrap;
 }
 
-/* Track: backbone runs the full width, nodes sit in 8 even grid cells on top. */
+/* Track: backbone runs the full width, nodes sit in 10 even grid cells on top. */
 .rail-track {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   align-items: center;
   min-height: 80px;
 }
@@ -2301,7 +2517,7 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   /* Rails sheet on mobile — reduce padding and let horizontal scroll kick in
      once the 8-tier grid no longer fits in the viewport. */
   .rails-scroll { padding: 12px; }
-  .rails-sheet { padding: 18px 20px 20px; min-width: 720px; }
+  .rails-sheet { padding: 18px 20px 20px; min-width: 900px; }
   .rails-ringbar { grid-template-columns: 100px 1fr 60px; column-gap: 8px; }
   .rail { grid-template-columns: 100px 1fr 60px; column-gap: 8px; padding: 10px 0; }
   .rail-label { font-size: 11px; letter-spacing: 1.6px; gap: 6px; }
@@ -2415,5 +2631,5 @@ body:not([data-tab="mastery"]) .patent.affordable { animation: none; }
   }
 
   .tree-header { flex-direction: row; padding: 6px 14px; }
-  .rails-sheet { min-width: 680px; padding: 14px 16px 16px; }
+  .rails-sheet { min-width: 860px; padding: 14px 16px 16px; }
 }
