@@ -99,7 +99,15 @@ body {
 .res-bar {
   display: flex; gap: 8px; flex: 1; justify-content: center;
   align-items: stretch;
+  /* Hide the horizontal scroll indicator. When a resource pill's value changes
+     width or fires its res-click-pulse box-shadow, iOS/Android briefly flash
+     their scrollbar indicator (a thin blue line at the edge of the scroll
+     container). Scrolling still works where supported; the indicator is just
+     suppressed. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.res-bar::-webkit-scrollbar { display: none; }
 .res {
   display: flex;
   align-items: stretch;
