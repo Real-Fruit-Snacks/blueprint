@@ -4,6 +4,20 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] — 2026-04-19
+
+Dedicated balance pass on the T6 → Prototype → Patent pipeline. Player feedback (long-standing, pre-v0.9) was that by the time prototypes were available at all, they already had enough to unlock most of the mastery library. The v0.6.1 cube-root nerf and v0.9.1 offline-cap fixes addressed adjacent issues but left the core pipeline too generous.
+
+### Balance
+
+- **T6 prototype production rates halved.** Refiner 0.01 → 0.005 proto/s, Compactor 0.05 → 0.025, Prototyper 0.2 → 0.1. Doubles the real time to accumulate prototypes without touching costs or consumption ratios. Now the first run that produces prototypes has to commit to the T6 tier rather than getting a huge stockpile from residual core drain.
+- **`patentsForPublish` curve tightened from `cbrt × 3` to `cbrt × 2`** — same cube-root shape, 33 % lower coefficient. First publishes still feel meaningful (100 K protos ≈ 92 patents, enough to buy a solid first round of tier-inheritance + a few leveled steps) but full mastery now requires **8–12 publishes instead of 3–5**, matching the 25–40 h target play arc.
+
+### Notes
+
+- Existing patents, schematics, Legacy Marks, and Archive upgrades are preserved. Balance changes only affect production from this point forward — no state migration required.
+- Combined effect: first publish earns roughly one-third of what it did pre-patch, and each subsequent run takes about twice as long to produce the same prototype count. Net pacing multiplier is ~6× slower mastery progression without adding frustration (no new gates, no new required content — just a gentler curve).
+
 ## [0.9.1] — 2026-04-19
 
 Two bugs reported in itch.io comments. Both player-blocking in different ways.

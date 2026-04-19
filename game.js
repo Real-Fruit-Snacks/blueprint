@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.9.1 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.9.2 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.9.1';
+  const VERSION = '0.9.2';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -131,9 +131,13 @@
     star_forge:     { tier: 5, slot: 5, mk: 'mk5',  name: 'STAR FORGE',     produces: { core: 1000 },    consumes: { circuit: 3000 }, cost: { circuit: 35000000, core: 400000 },   costMul: 1.29, icon: ICONS.star_forge },
 
     // T6 · Refinement (feeds the meta-prestige Publish loop)
-    refiner:        { tier: 6, slot: 1, mk: 'base', name: 'REFINER',        produces: { prototype: 0.01 }, consumes: { core: 1 },     cost: { core: 1000000 },   costMul: 1.27, icon: ICONS.compiler },
-    compactor:      { tier: 6, slot: 2, mk: 'base', name: 'COMPACTOR',      produces: { prototype: 0.05 }, consumes: { core: 5 },     cost: { core: 10000000 },  costMul: 1.3, icon: ICONS.fabricator },
-    prototyper:     { tier: 6, slot: 3, mk: 'base', name: 'PROTOTYPER',     produces: { prototype: 0.2 },  consumes: { core: 20 },    cost: { core: 100000000 }, costMul: 1.32, icon: ICONS.forge },
+    // v0.9.2 balance: output halved across the tier. Player feedback was that
+    // the first run to produce prototypes already stockpiled enough for most
+    // of the mastery library. Halving T6 rates doubles the time to accumulate
+    // prototypes without changing consumption ratios or costs.
+    refiner:        { tier: 6, slot: 1, mk: 'base', name: 'REFINER',        produces: { prototype: 0.005 }, consumes: { core: 1 },     cost: { core: 1000000 },   costMul: 1.27, icon: ICONS.compiler },
+    compactor:      { tier: 6, slot: 2, mk: 'base', name: 'COMPACTOR',      produces: { prototype: 0.025 }, consumes: { core: 5 },     cost: { core: 10000000 },  costMul: 1.3, icon: ICONS.fabricator },
+    prototyper:     { tier: 6, slot: 3, mk: 'base', name: 'PROTOTYPER',     produces: { prototype: 0.1 },   consumes: { core: 20 },    cost: { core: 100000000 }, costMul: 1.32, icon: ICONS.forge },
   };
 
   // ---------- SUPPORTS ----------
@@ -2621,13 +2625,16 @@
   // ---------- PUBLISH (meta-prestige) ----------
   function canPublish() { return (state.resources.prototype || 0) >= 1; }
   function patentsForPublish() {
-    // Cube-root damping so a single grindy publish can't end-run mastery.
-    // Total cost to unlock every patent once is ~904; with this curve a first
-    // publish at ~200K prototypes pays ~175, forcing ~5 publishes to fully
-    // master the library instead of 1.
-    // 10 proto → 6 patents · 100 → 13 · 1K → 30 · 10K → 64 · 100K → 139 · 1M → 300.
+    // v0.9.2 balance pass: further tightened from cbrt*3 to cbrt*2 after a
+    // player reported that the first prestige with prototypes already gave
+    // enough patents for most of the mastery library. Same curve shape,
+    // 33 % lower coefficient — first publishes stay meaningful without
+    // collapsing mastery progression into 1–2 runs.
+    // 10 proto → 4 · 100 → 9 · 1K → 20 · 10K → 43 · 100K → 92 · 1M → 200.
+    // Full unlock cost (~904 patents) now requires 8–12 publishes instead
+    // of 3–5, matching the 25–40 h target play arc.
     const proto = state.resources.prototype || 0;
-    let base = proto > 0 ? Math.floor(Math.cbrt(proto) * 3) : 0;
+    let base = proto > 0 ? Math.floor(Math.cbrt(proto) * 2) : 0;
     // RECURSIVE patent: +1 per 40 research levels owned (excluding origin)
     if (patentLevel('recursive') > 0) {
       let lvls = 0;
