@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.6.1 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.6.2 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.6.1';
+  const VERSION = '0.6.2';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -2106,7 +2106,17 @@
     }
     return true;
   }
-  function treeTabVisible() { return canPrestige() || state.meta.prestigeCount > 0 || state.meta.schematics > 0; }
+  function treeTabVisible() {
+    // prestigeCount and schematics both reset on Publish, which used to hide
+    // the Research tab after a player's first publish — confusing, because they
+    // already know it exists. The lifetime gates keep the tab visible forever
+    // once the player has done their first prestige or publish.
+    return canPrestige()
+        || state.meta.prestigeCount > 0
+        || state.meta.schematics > 0
+        || (state.meta.lifetimePrestiges || 0) > 0
+        || (state.meta.publishCount || 0) > 0;
+  }
 
   // ---------- RESEARCH ----------
   function nodeLevel(id) { return state.research.levels[id] || 0; }
@@ -2865,17 +2875,24 @@
     }
 
     // ◆ AUTO-PRESTIGE
+    // Run-time floor prevents an instant-ramp build from soft-locking the game
+    // into a prestige loop every tick. 30s minimum gives the player time to see
+    // the factory between resets and manually toggle auto-prestige off if they
+    // want to stop. Threshold still gates on schematic gain on top.
     if (r.autoPrestige && state.settings.autoPrestige && state.settings.autoPrestige.enabled) {
       const threshold = state.settings.autoPrestige.threshold || 10;
-      if (schematicsForPrestige() >= threshold && canPrestige()) {
+      const runElapsed = Date.now() - (state.meta.currentRunStartAt || Date.now());
+      if (runElapsed >= 30_000 && schematicsForPrestige() >= threshold && canPrestige()) {
         doPrestige();
         return; // state has been reset
       }
     }
-    // ◆ AUTO-PUBLISH
+    // ◆ AUTO-PUBLISH — same soft-lock guard, with a longer floor since publish
+    // is the bigger reset and a rapid auto-publish loop would be worse.
     if (r.autoPublish && state.settings.autoPublish && state.settings.autoPublish.enabled) {
       const threshold = state.settings.autoPublish.threshold || 10;
-      if ((state.resources.prototype || 0) >= threshold && canPublish()) {
+      const runElapsed = Date.now() - (state.meta.currentRunStartAt || Date.now());
+      if (runElapsed >= 60_000 && (state.resources.prototype || 0) >= threshold && canPublish()) {
         doPublish();
         return;
       }

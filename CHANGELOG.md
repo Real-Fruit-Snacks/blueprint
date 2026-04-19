@@ -4,6 +4,15 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-04-18
+
+Hotfix for two issues reported in itch.io comments.
+
+### Fixed
+
+- **Auto-prestige can no longer soft-lock the game into a reset loop.** A late-game build that produces 10+ schematics per tick was triggering a prestige every frame, leaving the player no time to interact. Both auto-prestige and auto-publish now require a minimum run time before firing (30 s for prestige, 60 s for publish). The threshold still gates on top, so short manual runs aren't affected.
+- **Research (Schematics) tab no longer disappears after a Publish.** The old visibility check gated on `prestigeCount > 0 || schematics > 0`, both of which reset on publish — so the tab hid itself right after players unlocked it. The lifetime gates `lifetimePrestiges > 0` and `publishCount > 0` keep the tab visible forever once either has happened.
+
 ## [0.6.1] — 2026-04-18
 
 First post-launch patch, driven by early itch.io feedback and an internal
