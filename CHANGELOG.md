@@ -4,6 +4,29 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] — 2026-04-19
+
+Pre-v1.0 polish: fill the achievement gaps around the new content and endgame, and add the meta capstone players always ask for.
+
+### Added
+
+- **12 new achievements** (total 59 → 71).
+- **Endgame (5 + 1 capstone):**
+  - `◆ DEBUT` — Complete your first Exhibition. +10 % schematic gain.
+  - `◆ LEGACY LADDER` — Earn 5 lifetime Legacy Marks. +5 % schematic gain.
+  - `◆ LASTING LEGACY` — Earn 10 lifetime Legacy Marks. +10 % schematic gain.
+  - `◆ CURATOR` — Own 5 Archive upgrades. +10 % production.
+  - `◆ ARCHIVE COMPLETE` — Own every Archive upgrade. +25 % production.
+  - `◆ EXHIBITIONIST` — Complete every unique Exhibition. +25 % schematic gain.
+- **v0.7.0 challenge-mode completions** — one per challenge, +5 % bonus each, matching the shape of the existing `ch_*` achievements: `ch_austere`, `ch_glassware`, `ch_overclock`, `ch_echo`, `ch_famine`.
+- **`◆◆◆ PERFECTIONIST`** — earn every other achievement. Rewards **+50 % production · +50 % schematic gain · +50 % prototype production**, the largest stacking bonus in the game. The achievement count used in its goal auto-excludes itself so it isn't self-referential.
+
+### Notes
+
+- `legacy_5` / `legacy_10` count *lifetime* Legacy Marks via the exhibition completion ledger — so spending marks in the Archive doesn't un-earn the achievement.
+- `archive_half` / `archive_complete` use `LEGACY_UPGRADES` length (currently 10) so if we add more upgrades later the goals auto-rescale to 5 / 10 / etc.
+- `perfectionist` iterates the full `ACHIEVEMENTS` keys, so every future achievement automatically raises its bar by 1 — no manual bookkeeping.
+
 ## [0.8.0] — 2026-04-19
 
 Phase 2 of the v0.7 / v0.8 roadmap — the endgame layer. Ship alongside v0.7.0's content + slowdown so players can feedback the whole stack at once before v1.0. Not a soft launch: this is the "now there's actually something to do past mastery" patch.

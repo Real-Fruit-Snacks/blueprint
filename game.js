@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.8.0 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.8.1 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.8.0';
+  const VERSION = '0.8.1';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -1304,6 +1304,24 @@
     // BLUEPRINT — variety/commitment achievements tied to the per-run modifier system.
     bp_variety:      { schematicMul: 0.10,   label: '+10% schematics gain' },
     bp_believer:     { prodMul: 0.10,        label: '+10% production' },
+
+    // v0.7.0 new challenge-mode completions
+    ch_austere:      { prodMul: 0.05,        label: '+5% production' },
+    ch_glassware:    { prodMul: 0.05,        label: '+5% production' },
+    ch_overclock:    { prodMul: 0.05,        label: '+5% production' },
+    ch_echo:         { schematicMul: 0.05,   label: '+5% schematics gain' },
+    ch_famine:       { prodMul: 0.05,        label: '+5% production' },
+
+    // v0.8.1 endgame achievements — stacked bonuses since these take a long time.
+    first_exhibition:  { schematicMul: 0.10,  label: '+10% schematics gain' },
+    legacy_5:          { schematicMul: 0.05,  label: '+5% schematics gain' },
+    legacy_10:         { schematicMul: 0.10,  label: '+10% schematics gain' },
+    archive_half:      { prodMul: 0.10,       label: '+10% production' },
+    archive_complete:  { prodMul: 0.25,       label: '+25% production' },
+    exh_variety:       { schematicMul: 0.25,  label: '+25% schematics gain' },
+
+    // Capstone — earn every other achievement.
+    perfectionist:     { prodMul: 0.50, schematicMul: 0.50, prototypeMul: 0.50, label: '+50% production · +50% schematics · +50% prototype' },
   };
 
   const ACHIEVEMENTS = {
@@ -1375,6 +1393,24 @@
 
     bp_variety:       { name: '◆ BLUEPRINTER',     desc: 'Try every unique Blueprint at least once.',                 group: 'challenge' },
     bp_believer:      { name: '◆ TRUE BELIEVER',   desc: 'Prestige with the same Blueprint 5 times.',                 group: 'challenge' },
+
+    // v0.7.0 new challenge-mode completions
+    ch_austere:       { name: '◆ AUSTERE MODE',    desc: 'Complete the Austere challenge.',                           group: 'challenge' },
+    ch_glassware:     { name: '◆ GLASSWARE MODE',  desc: 'Complete the Glassware challenge.',                         group: 'challenge' },
+    ch_overclock:     { name: '◆ OVERCLOCK MODE',  desc: 'Complete the Overclock challenge.',                         group: 'challenge' },
+    ch_echo:          { name: '◆ ECHO MODE',       desc: 'Complete the Echo challenge.',                              group: 'challenge' },
+    ch_famine:        { name: '◆ FAMINE MODE',     desc: 'Complete the Famine challenge.',                            group: 'challenge' },
+
+    // v0.8.1 endgame — Exhibitions + Archive progression
+    first_exhibition: { name: '◆ DEBUT',           desc: 'Complete your first Exhibition.',                           group: 'meta' },
+    legacy_5:         { name: '◆ LEGACY LADDER',   desc: 'Earn 5 lifetime Legacy Marks.',                             group: 'meta' },
+    legacy_10:        { name: '◆ LASTING LEGACY',  desc: 'Earn 10 lifetime Legacy Marks.',                            group: 'meta' },
+    archive_half:     { name: '◆ CURATOR',         desc: 'Own 5 Archive upgrades.',                                   group: 'meta' },
+    archive_complete: { name: '◆ ARCHIVE COMPLETE', desc: 'Own every Archive upgrade.',                               group: 'meta' },
+    exh_variety:      { name: '◆ EXHIBITIONIST',   desc: 'Complete every unique Exhibition.',                         group: 'challenge' },
+
+    // Capstone
+    perfectionist:    { name: '◆◆◆ PERFECTIONIST', desc: 'Earn every other achievement.',                             group: 'challenge' },
   };
 
   // Returns { current, goal } for any achievement so progress bars can render.
@@ -1481,6 +1517,49 @@
         let best = 0;
         for (const k in uses) if (uses[k] > best) best = uses[k];
         return { current: best, goal: 5 };
+      }
+      // v0.7.0 challenge-mode completions
+      case 'ch_austere':      return { current: (m.challenge && m.challenge.completed && m.challenge.completed.austere)   ? 1 : 0, goal: 1 };
+      case 'ch_glassware':    return { current: (m.challenge && m.challenge.completed && m.challenge.completed.glassware) ? 1 : 0, goal: 1 };
+      case 'ch_overclock':    return { current: (m.challenge && m.challenge.completed && m.challenge.completed.overclock) ? 1 : 0, goal: 1 };
+      case 'ch_echo':         return { current: (m.challenge && m.challenge.completed && m.challenge.completed.echo)      ? 1 : 0, goal: 1 };
+      case 'ch_famine':       return { current: (m.challenge && m.challenge.completed && m.challenge.completed.famine)    ? 1 : 0, goal: 1 };
+      // v0.8.1 endgame — Exhibitions + Archive
+      case 'first_exhibition': {
+        const c = (m.exhibitions && m.exhibitions.completed) || {};
+        let total = 0; for (const k in c) total += c[k] || 0;
+        return { current: total > 0 ? 1 : 0, goal: 1 };
+      }
+      case 'legacy_5':
+      case 'legacy_10': {
+        // Sum total exhibitions ever completed — each grants 1 LM, so this is
+        // the lifetime-marks total even after the player spends them.
+        const c = (m.exhibitions && m.exhibitions.completed) || {};
+        let total = 0; for (const k in c) total += c[k] || 0;
+        return { current: total, goal: id === 'legacy_5' ? 5 : 10 };
+      }
+      case 'archive_half':
+      case 'archive_complete': {
+        const up = m.legacyUpgrades || {};
+        let owned = 0; for (const k in up) if (up[k]) owned++;
+        const total = Object.keys(LEGACY_UPGRADES).length;
+        return { current: owned, goal: id === 'archive_half' ? Math.ceil(total / 2) : total };
+      }
+      case 'exh_variety': {
+        const c = (m.exhibitions && m.exhibitions.completed) || {};
+        let uniq = 0; const total = Object.keys(EXHIBITIONS).length;
+        for (const k in EXHIBITIONS) if (c[k]) uniq++;
+        return { current: uniq, goal: total };
+      }
+      case 'perfectionist': {
+        const earned = m.achievements || {};
+        const total = Object.keys(ACHIEVEMENTS).length - 1; // exclude self
+        let c = 0;
+        for (const k in ACHIEVEMENTS) {
+          if (k === 'perfectionist') continue;
+          if (earned[k]) c++;
+        }
+        return { current: c, goal: total };
       }
     }
     return { current: 0, goal: 1 };
