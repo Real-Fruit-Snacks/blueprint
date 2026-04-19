@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.8.2 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.9.0 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.8.2';
+  const VERSION = '0.9.0';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -6089,12 +6089,11 @@
   let lastRenderAt = 0;
   const RENDER_INTERVAL_MS = 66; // ~15 FPS UI
   function loop(nowPerf) {
-    // Tab hidden — freeze the simulation entirely. Browsers throttle RAF to
-    // ~1 Hz (or pause it) in background, which combined with the dt clamp
-    // below would leak sim time at 1/15 normal speed. Instead we do nothing
-    // and rely on the visibilitychange handler to run applyOffline() when
-    // the tab comes back, ticking the full wall-clock gap in one catch-up
-    // pass. Keeps lastTickAt frozen at the hide moment for that catch-up.
+    // Tab hidden — skip the rAF-driven tick. The sim-worker heartbeat posts
+    // tick messages at 1 Hz from a separate thread and drives the simulation
+    // while hidden, so production keeps accumulating. Rendering stays paused
+    // (the browser wouldn't paint anyway). applyOffline on visibilitychange
+    // stays as a safety net if the browser deep-suspends the worker.
     if (document.visibilityState === 'hidden') {
       lastFrameAt = nowPerf;
       requestAnimationFrame(loop);
@@ -6299,6 +6298,36 @@
     prevUnlockSig = '';
     bindTabs(); bindUI();
     requestAnimationFrame(loop);
+
+    // v0.9.0 — sim-worker heartbeat. Drives simulation ticks while the tab
+    // is hidden so the game actually runs in the background, not just
+    // catches up on return. Try/catch because some iframe sandboxes or
+    // file:// contexts refuse to construct Workers; we degrade gracefully
+    // to the rAF + applyOffline path.
+    let simWorker = null;
+    if (typeof Worker !== 'undefined') {
+      try {
+        simWorker = new Worker('sim-worker.js');
+        simWorker.onmessage = (e) => {
+          if (!e.data || e.data.type !== 'tick') return;
+          // Only apply the worker tick while the tab is hidden — when
+          // visible, the rAF loop is already running and adding a 1 Hz
+          // tick on top would double-count.
+          if (document.visibilityState !== 'hidden') return;
+          const dt = Math.min(Math.max(e.data.dtSec || 0, 0), 5); // clamp 0..5s
+          if (dt <= 0) return;
+          tick(dt);
+          state.lastTickAt = Date.now();
+          // Let achievements surface on return rather than mid-hidden to
+          // avoid firing banners nobody's watching. checkUnlockChanges()
+          // mutates DOM — skip while hidden; it'll run on the next visible
+          // frame anyway.
+        };
+        simWorker.onerror = () => { /* worker failed — applyOffline fallback handles it */ };
+      } catch (err) {
+        // Worker constructor unavailable — no-op, applyOffline picks up the slack.
+      }
+    }
 
     window.addEventListener('beforeunload', save);
     window.addEventListener('visibilitychange', () => {

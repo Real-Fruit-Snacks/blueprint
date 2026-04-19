@@ -4,12 +4,13 @@
    cache fallback. Bump CACHE_NAME whenever shipping new assets so clients pull
    the fresh shell on the next load.
 */
-const CACHE_NAME = 'blueprint-v0.8.2-1';
+const CACHE_NAME = 'blueprint-v0.9.0-1';
 const PRECACHE = [
   './',
   './index.html',
   './style.css',
   './game.js',
+  './sim-worker.js',
   './manifest.json',
   './icon.svg',
   './og-image.svg',

@@ -4,6 +4,27 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-04-19
+
+Background-tab simulation now actually runs, not just catches up on return.
+
+### Added
+
+- **`sim-worker.js`** — a tiny Web Worker that posts tick messages at 1 Hz from its own thread. Workers aren't subject to the main tab's visibility throttling, so the heartbeat keeps firing at full speed even when the game tab is hidden.
+- Main thread constructs the worker in `boot()` and routes tick messages to `tick(dtSec)` *only when the tab is hidden*. When the tab is visible, the normal rAF loop handles simulation at 60 Hz as before — worker messages are ignored to avoid double-counting.
+- Worker creation is guarded by try/catch so any context that refuses to construct Workers (certain iframe sandboxes, `file://` loads) falls back cleanly to the v0.8.2 `applyOffline`-on-return path with no broken state.
+- Service worker precache updated to include `sim-worker.js`, so PWA installs get the heartbeat script alongside the rest of the shell.
+
+### Why scoped, not a full rewrite
+
+A "move all simulation state into the worker" architecture would be a 1-2 day refactor touching every buy / prestige / publish / click path, and would likely ship new bugs before v1.0. The scoped heartbeat approach delivers what players actually care about — continuous background simulation — at the cost of 1 Hz tick granularity in background (vs 60 Hz when visible). For an incremental game with continuous production rates and coarse time-based events, 1 Hz is indistinguishable from full rate.
+
+### Interaction with v0.8.2
+
+- `applyOffline()` on `visibilitychange → visible` stays as a safety net. If the browser deep-suspends the worker (some browsers do this for tabs hidden for many hours on low-end devices), the catch-up pass recovers the missed simulation time. With the worker running normally the catch-up `dt` is near zero, so it's a no-op in practice.
+- The "welcome back" modal still fires for absences ≥ 30 s, but the reported earnings now reflect the worker's live accumulation plus any small catch-up.
+- `OFFLINE_CAP_MS` still applies at boot — if the browser kills the tab outright (e.g. reboot, forced refresh), production on return is still capped at 8 h (+ TAILWIND / WIDER NET bonuses).
+
 ## [0.8.2] — 2026-04-19
 
 ### Changed

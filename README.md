@@ -15,7 +15,7 @@
   &nbsp;
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-b0d0e4?style=for-the-badge&labelColor=0d3b4f"></a>
   &nbsp;
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/v0.8.2-78e08f?style=for-the-badge&labelColor=0d3b4f"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/v0.9.0-78e08f?style=for-the-badge&labelColor=0d3b4f"></a>
   &nbsp;
   <img alt="Zero dependencies" src="https://img.shields.io/badge/zero%20deps-7aa5bf?style=for-the-badge&labelColor=0d3b4f">
 </p>
@@ -144,7 +144,7 @@ Tested on current Chrome, Firefox, Edge, and Safari (desktop + mobile). The game
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the full version history. The current release is **v0.8.2**.
+See [CHANGELOG.md](CHANGELOG.md) for the full version history. The current release is **v0.9.0**.
 
 ## License
 
