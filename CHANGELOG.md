@@ -4,6 +4,40 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-04-19
+
+Phase 2 of the v0.7 / v0.8 roadmap — the endgame layer. Ship alongside v0.7.0's content + slowdown so players can feedback the whole stack at once before v1.0. Not a soft launch: this is the "now there's actually something to do past mastery" patch.
+
+### Added
+
+- **Third prestige layer — Exhibitions.** Unlocks once the player has earned **30 lifetime Patents**. A new top-bar tab, between Mastery and Achievements, surfaces the system. Exhibitions are run-spanning goals rolled from a pool of 3; the player picks one, attempts it during their next run, and on Prestige the goal is evaluated. Success grants **1 Legacy Mark**; failure clears the slot with no penalty. The player rolls a new pool whenever they want another shot.
+- **8 starting exhibitions**: SCALE SHOW (produce 10 M ore), MINIATURE WORKS (prestige with ≤ 20 machines), THE LONG HAUL (1 h+ run), EXHIBITION MATCH (5 K schematics in one prestige), THE GRAND TOUR (own every MK-V), SILENT EXHIBITION (zero clicks), EMPTY STAGE (no research), HEAVY ARTILLERY (10+ of every slot-1 base machine).
+- **The Archive — 10 Legacy Upgrades.** Permanent purchases, persist through every reset (prestige AND publish):
+  - ENDOWMENT (1 LM) · +5 % global production
+  - DRAFTING HEIRLOOM (1 LM) · +1 starting drill, stacks with FAST START
+  - OPEN ARCHIVE (2 LM) · whole research tree revealed from start
+  - PATRONS (2 LM) · +10 % patent gain
+  - EFFICIENT MIND (2 LM) · -20 % research cost
+  - AMPLIFIER (3 LM) · challenge rewards ×1.5
+  - FOURTH BLUEPRINT (3 LM) · blueprint pool rolls 4 per prestige
+  - WIDER NET (3 LM) · +6 h offline cap
+  - ANNOTATED SCHEMATIC (4 LM) · +20 % schematic gain
+  - GRAND ARCHIVE (5 LM) · -25 % tier unlock costs
+- Total Archive cost is **28 Legacy Marks** — at ~1 LM per completed exhibition run, the full Archive is 28+ dedicated prestiges of endgame work.
+- New **Legacy layer** in `researchMultipliers()` applied before the challenge layer so AMPLIFIER can scale every challenge reward in-place.
+- **Save migration** — existing saves pick up `legacyMarks`, `legacyUpgrades`, and `exhibitions` fields from the fresh-state merge without losing any other data.
+
+### Integration
+
+- **Challenges & Exhibitions evaluate independently on prestige.** You can run a challenge *and* an exhibition in the same prestige — both the challenge's permanent reward and the exhibition's Legacy Mark drop on success.
+- **ECHO challenge reward + FOURTH BLUEPRINT legacy upgrade stack** — both set `m.extraBlueprintRoll`, so owning either gives you 4 blueprint rolls per prestige.
+- **ARCHIVIST blueprint + EFFICIENT MIND legacy upgrade stack** — multiplicative through `m.researchCostMul`.
+
+### Balance
+
+- **Pacing target:** with v0.7.0's slowdown, first publish lands at ~3 h. Exhibitions unlock at 30 lifetime Patents (~10–15 h of play). The full Archive takes another 10–20 h on top. That puts "fully completed" in the **25–40 h range** the game has been missing.
+- **No base numbers touched this patch** — the global slowdown already shipped in v0.7.0. v0.8.0 adds content on top of it, not further nerfs.
+
 ## [0.7.0] — 2026-04-19
 
 Phase 1 of the v0.7 / v0.8 content roadmap. Five new challenges, five new blueprints, and a global balance pass that pushes the first publish from ~1 h to ~3 h of focused play. Phase 2 (the Exhibition endgame) ships as v0.8.0 after this one settles.

@@ -15,7 +15,7 @@
   &nbsp;
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-b0d0e4?style=for-the-badge&labelColor=0d3b4f"></a>
   &nbsp;
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/v0.7.0-78e08f?style=for-the-badge&labelColor=0d3b4f"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/v0.8.0-78e08f?style=for-the-badge&labelColor=0d3b4f"></a>
   &nbsp;
   <img alt="Zero dependencies" src="https://img.shields.io/badge/zero%20deps-7aa5bf?style=for-the-badge&labelColor=0d3b4f">
 </p>
@@ -53,10 +53,11 @@ No framework, no build step, no external assets. Every machine icon, research no
 
 ### Progression
 - **60+ research nodes** on a radial tree across six discipline branches
-- **Twin prestige layers** — Schematics (per-run) and Patents (meta, survives every reset)
+- **Three prestige layers** — Schematics (per-run), Patents (meta, survives each publish), Legacy Marks (endgame, survives every reset including publish)
 - **21 patents** in the Mastery library with stacking leveled upgrades
 - **14 challenge modes** with constraint-driven runs and permanent rewards
 - **15 blueprints** — random per-run modifiers rolled after every prestige for run-to-run variance
+- **8 exhibitions** + a **10-item Archive** of permanent upgrades spendable with Legacy Marks (endgame, unlocks at 30 lifetime Patents)
 - **59 achievements** with progress bars and stacking passive bonuses
 
 ### Interaction
@@ -143,7 +144,7 @@ Tested on current Chrome, Firefox, Edge, and Safari (desktop + mobile). The game
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the full version history. The current release is **v0.7.0**.
+See [CHANGELOG.md](CHANGELOG.md) for the full version history. The current release is **v0.8.0**.
 
 ## License
 

@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.7.0 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.8.0 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.7.0';
+  const VERSION = '0.8.0';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -780,6 +780,203 @@
     },
   };
 
+  // ---------- EXHIBITIONS (v0.8.0 · the third prestige layer) ----------
+  // Unlocks once the player has earned 30 lifetime Patents. Each exhibition is
+  // a run-spanning goal: pick one after a prestige, attempt it during the next
+  // run, and on prestige we check the goal against the run's totals. Success
+  // grants 1 Legacy Mark; failure just clears the active flag with no penalty.
+  // Legacy Marks are spent in the Archive to buy permanent upgrades that
+  // persist through every reset (prestige AND publish).
+  //
+  // Each exhibition's check(state) runs AT the moment of prestige, before the
+  // run state is wiped. totalProduced / totalClicks / machines / supports all
+  // reflect the run that just ended.
+  const EXHIBITIONS = {
+    scale_show: {
+      name: 'SCALE SHOW',
+      desc: 'Produce <b>10 M ore</b> in a single prestige run.',
+      goalLabel: 'Produce 10M ore in one run',
+      check: (s) => (s.meta.totalProduced.ore || 0) >= 10_000_000,
+    },
+    miniature_works: {
+      name: 'MINIATURE WORKS',
+      desc: 'Prestige with <b>≤ 20 total machines</b>.',
+      goalLabel: 'Prestige with ≤ 20 machines',
+      check: (s) => {
+        let total = 0;
+        for (const id in s.machines) total += s.machines[id] || 0;
+        return total <= 20;
+      },
+    },
+    long_haul: {
+      name: 'THE LONG HAUL',
+      desc: 'Prestige after a run lasting at least <b>1 hour</b>.',
+      goalLabel: 'Prestige after a 1h+ run',
+      check: (s) => (Date.now() - (s.meta.currentRunStartAt || Date.now())) >= 3_600_000,
+    },
+    exhibition_match: {
+      name: 'EXHIBITION MATCH',
+      desc: 'Earn <b>5K schematics</b> in a single prestige.',
+      goalLabel: 'Earn 5K+ schematics in one run',
+      check: (s) => schematicsForPrestige() >= 5000,
+    },
+    grand_tour: {
+      name: 'THE GRAND TOUR',
+      desc: 'Prestige owning at least <b>1 of every MK-V</b> machine.',
+      goalLabel: 'Own all five MK-V at prestige',
+      check: (s) => {
+        for (const id in MACHINES) {
+          if (MACHINES[id].mk === 'mk5' && (s.machines[id] || 0) === 0) return false;
+        }
+        return true;
+      },
+    },
+    silent_exhibition: {
+      name: 'SILENT EXHIBITION',
+      desc: 'Prestige without a <b>single manual click</b>.',
+      goalLabel: 'Earn schematics with 0 clicks',
+      check: (s) => (s.meta.totalClicks || 0) === 0,
+    },
+    empty_stage: {
+      name: 'EMPTY STAGE',
+      desc: 'Prestige without buying <b>any research</b> this run.',
+      goalLabel: 'Earn schematics with an empty tree',
+      check: (s) => !s.meta.currentRunResearchBought,
+    },
+    heavy_artillery: {
+      name: 'HEAVY ARTILLERY',
+      desc: 'Own <b>10+ of every slot-1 base machine</b> (T1–T5) at prestige.',
+      goalLabel: '10+ drill / furnace / press / assembler / forge',
+      check: (s) => {
+        const SLOT_1 = ['drill', 'furnace', 'press', 'assembler', 'forge'];
+        return SLOT_1.every(id => (s.machines[id] || 0) >= 10);
+      },
+    },
+  };
+
+  // LEGACY_UPGRADES — the Archive shop. Each is a one-time purchase that
+  // applies its effect via researchMultipliers() through a new legacy layer.
+  // Costs total 28 Legacy Marks; at ~1 LM per completed exhibition run, a
+  // completionist will do ~28+ prestiges worth of exhibition work.
+  const LEGACY_UPGRADES = {
+    endowment: {
+      name: 'ENDOWMENT',
+      desc: '<b>+5 %</b> global production, permanent across every reset.',
+      cost: 1,
+      applyEffect: (m) => { m.prodMul *= 1.05; },
+    },
+    drafting_heirloom: {
+      name: 'DRAFTING HEIRLOOM',
+      desc: 'Start every run with <b>+1 additional Drill</b>, stacks with FAST START.',
+      cost: 1,
+      applyEffect: () => { /* startup grant applied in applyStartupBonuses */ },
+    },
+    open_archive: {
+      name: 'OPEN ARCHIVE',
+      desc: 'Reveal the entire <b>research tree</b> from the start of each run. (Redundant with ACADEMIA.)',
+      cost: 2,
+      applyEffect: () => { /* checked by nodeRevealed */ },
+    },
+    patrons: {
+      name: 'PATRONS',
+      desc: '<b>+10 % patent gain</b> on every publish, permanent.',
+      cost: 2,
+      applyEffect: (m) => { m.patentMul = (m.patentMul || 1) * 1.10; },
+    },
+    efficient_mind: {
+      name: 'EFFICIENT MIND',
+      desc: '<b>-20 % research cost</b> permanently.',
+      cost: 2,
+      applyEffect: (m) => { m.researchCostMul *= 0.80; },
+    },
+    amplifier: {
+      name: 'AMPLIFIER',
+      desc: 'Challenge rewards <b>×1.5</b> — applies to every completed challenge\'s permanent bonus.',
+      cost: 3,
+      applyEffect: () => { /* handled inline via m.challengeRewardMul */ },
+    },
+    fourth_blueprint: {
+      name: 'FOURTH BLUEPRINT',
+      desc: 'Roll <b>4 Blueprints</b> per prestige instead of 3, for the whole career.',
+      cost: 3,
+      applyEffect: (m) => { m.extraBlueprintRoll = true; },
+    },
+    wider_net: {
+      name: 'WIDER NET',
+      desc: '<b>+6 h offline cap</b> permanently (stacks with TAILWIND).',
+      cost: 3,
+      applyEffect: (m) => { m.offlineHoursAdd += 6; },
+    },
+    annotated_schematic: {
+      name: 'ANNOTATED SCHEMATIC',
+      desc: '<b>+20 % schematic gain</b> permanently.',
+      cost: 4,
+      applyEffect: (m) => { m.schematicMul *= 1.20; },
+    },
+    grand_archive: {
+      name: 'GRAND ARCHIVE',
+      desc: 'All <b>tier unlock costs -25 %</b> permanently.',
+      cost: 5,
+      applyEffect: (m) => { m.tierUnlockMul *= 0.75; },
+    },
+  };
+
+  function exhibitionsUnlocked() {
+    return (state.meta.totalPatents || 0) >= 30;
+  }
+  function activeExhibition() {
+    const e = state.meta.exhibitions;
+    return (e && e.active) || null;
+  }
+  function rollExhibitionPool() {
+    const ids = Object.keys(EXHIBITIONS);
+    const shuffled = ids.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, 3);
+  }
+  function selectExhibition(id) {
+    if (!EXHIBITIONS[id]) return false;
+    if (!state.meta.exhibitions) {
+      state.meta.exhibitions = { active: null, completed: {}, failed: {}, pool: [] };
+    }
+    state.meta.exhibitions.active = id;
+    state.meta.exhibitions.pool = [];
+    invalidateRM();
+    save();
+    return true;
+  }
+  function skipExhibitions() {
+    if (state.meta.exhibitions) state.meta.exhibitions.pool = [];
+    save();
+  }
+  function evaluateExhibition() {
+    const id = activeExhibition();
+    if (!id) return null;
+    const ex = EXHIBITIONS[id];
+    if (!ex) return null;
+    return ex.check(state) ? 'won' : 'lost';
+  }
+  function legacyLevel(id) {
+    const up = state.meta.legacyUpgrades || {};
+    return up[id] || 0;
+  }
+  function buyLegacyUpgrade(id) {
+    const u = LEGACY_UPGRADES[id];
+    if (!u) return false;
+    if (legacyLevel(id) >= 1) return false;
+    if ((state.meta.legacyMarks || 0) < u.cost) return false;
+    state.meta.legacyMarks -= u.cost;
+    state.meta.legacyUpgrades = state.meta.legacyUpgrades || {};
+    state.meta.legacyUpgrades[id] = 1;
+    invalidateRM();
+    audio.research && audio.research();
+    save();
+    return true;
+  }
+
   function activeBlueprint() {
     const b = state.meta.blueprints;
     return (b && b.active) || null;
@@ -1515,6 +1712,13 @@
         // picks for the TRUE BELIEVER achievement; `seen` counts all unique
         // ids ever selected for BLUEPRINTER.
         blueprints: { active: null, pool: [], timesUsed: {}, seen: {} },
+        // v0.8.0 — Exhibitions (third prestige layer). legacyMarks is the
+        // currency, legacyUpgrades is the Archive ownership ledger. Exhibitions
+        // mirror the Blueprint pool/active/ledger shape; `active` persists
+        // across prestige-eligible runs until the goal is evaluated.
+        legacyMarks: 0,
+        legacyUpgrades: {},
+        exhibitions: { active: null, completed: {}, failed: {}, pool: [] },
       },
       log: [],
       lastSaveAt: Date.now(),
@@ -2249,6 +2453,8 @@
     if (!n) return false;
     if (n.requires.length === 0) return true;  // origin always revealed
     if (patentLevel('academia') > 0) return true; // ACADEMIA patent reveals whole tree
+    // OPEN ARCHIVE legacy upgrade — same effect, cheaper entry point (endgame).
+    if ((state.meta.legacyUpgrades || {}).open_archive) return true;
     for (const req of n.requires) {
       const reqNode = TREE_NODES[req];
       if (!reqNode) return false;
@@ -2328,7 +2534,9 @@
       }
       base += Math.floor(lvls / 40);
     }
-    return base;
+    // PATRONS legacy upgrade — permanent +10% patent gain.
+    const mul = rm().patentMul || 1;
+    return Math.floor(base * mul);
   }
   function doPublish() {
     const gained = patentsForPublish();
@@ -2414,6 +2622,10 @@
     if ((lvls.legacy_wealth || 0) > 0) {
       state.resources.ore = Math.max(state.resources.ore || 0, 10000);
     }
+    // DRAFTING HEIRLOOM legacy — +1 starting drill, stacks on top of fast_start.
+    if ((state.meta.legacyUpgrades || {}).drafting_heirloom) {
+      state.machines.drill = (state.machines.drill || 0) + 1;
+    }
   }
 
   function researchBuy(id) {
@@ -2482,8 +2694,11 @@
       luckyFifth: false,
       // v0.7.0 — blueprint + challenge fields
       freeFirst3: false,         // VANGUARD blueprint: first 3 of each type free
-      researchCostMul: 1,        // ARCHIVIST blueprint: scales research node cost
-      extraBlueprintRoll: false, // ECHO challenge reward: pool rolls 4 instead of 3
+      researchCostMul: 1,        // ARCHIVIST blueprint + EFFICIENT MIND legacy: scales research node cost
+      extraBlueprintRoll: false, // ECHO challenge reward + FOURTH BLUEPRINT legacy: pool rolls 4 instead of 3
+      // v0.8.0 — legacy (exhibition shop) fields
+      patentMul: 1,              // PATRONS legacy: extra patents per publish
+      challengeRewardMul: 1,     // AMPLIFIER legacy: scales every challenge's reward
     };
     for (const id in TREE_NODES) {
       const lvl = nodeLevel(id);
@@ -2510,11 +2725,44 @@
       if (b.prototypeMul)  m.prototypeMul *= (1 + b.prototypeMul);
       if (b.clickAdd)      m.clickAdd += b.clickAdd;
     }
+    // legacy layer — Archive upgrades, persist through every reset. Applied
+    // BEFORE challenges so AMPLIFIER can scale challenge rewards.
+    const lu = state.meta.legacyUpgrades || {};
+    for (const id in lu) {
+      if (!lu[id]) continue;
+      const u = LEGACY_UPGRADES[id];
+      if (u && u.applyEffect) u.applyEffect(m);
+    }
     // challenge layer — each completed challenge grants a permanent bonus.
+    // AMPLIFIER legacy (if owned) scales each reward proportionally.
     const cc = (state.meta.challenge && state.meta.challenge.completed) || {};
+    const hasAmplifier = (state.meta.legacyUpgrades || {}).amplifier;
     for (const id in cc) {
       const ch = CHALLENGES[id];
-      if (ch && ch.applyReward) ch.applyReward(m);
+      if (!ch || !ch.applyReward) continue;
+      if (hasAmplifier) {
+        // Apply 1.5x by calling the reward twice with a partial proxy — simpler:
+        // just apply once, then mutate the common bonus fields by +50%.
+        const before = {
+          prodMul: m.prodMul, consMul: m.consMul, costMul: m.costMul,
+          schematicMul: m.schematicMul, powerBoost: m.powerBoost,
+          symbiosis: m.symbiosis, clickAdd: m.clickAdd,
+          offlineHoursAdd: m.offlineHoursAdd, autoClickPerSec: m.autoClickPerSec,
+        };
+        ch.applyReward(m);
+        // Boost the delta by 50%
+        if (m.prodMul !== before.prodMul)             m.prodMul       = before.prodMul       * (1 + (m.prodMul       / before.prodMul       - 1) * 1.5);
+        if (m.consMul !== before.consMul)             m.consMul       = before.consMul       * (1 + (m.consMul       / before.consMul       - 1) * 1.5);
+        if (m.costMul !== before.costMul)             m.costMul       = before.costMul       * (1 + (m.costMul       / before.costMul       - 1) * 1.5);
+        if (m.schematicMul !== before.schematicMul)   m.schematicMul  = before.schematicMul  * (1 + (m.schematicMul  / before.schematicMul  - 1) * 1.5);
+        if (m.powerBoost !== before.powerBoost)       m.powerBoost    = before.powerBoost    * (1 + (m.powerBoost    / before.powerBoost    - 1) * 1.5);
+        if (m.symbiosis !== before.symbiosis)         m.symbiosis     = before.symbiosis     + (m.symbiosis     - before.symbiosis)     * 0.5;
+        if (m.clickAdd !== before.clickAdd)           m.clickAdd      = before.clickAdd      + (m.clickAdd      - before.clickAdd)      * 0.5;
+        if (m.offlineHoursAdd !== before.offlineHoursAdd) m.offlineHoursAdd = before.offlineHoursAdd + (m.offlineHoursAdd - before.offlineHoursAdd) * 0.5;
+        if (m.autoClickPerSec !== before.autoClickPerSec) m.autoClickPerSec = before.autoClickPerSec + (m.autoClickPerSec - before.autoClickPerSec) * 0.5;
+      } else {
+        ch.applyReward(m);
+      }
     }
     // blueprint layer — single active modifier for the current run only.
     const bpId = activeBlueprint();
@@ -3186,6 +3434,23 @@
       }
     }
 
+    // Exhibition evaluation — same shape as challenges, separate currency.
+    // Runs before state reset so the check() sees the finished run.
+    const ex = activeExhibition();
+    let exhibitionResolved = null;
+    if (ex) {
+      const outcome = evaluateExhibition();
+      exhibitionResolved = { id: ex, win: outcome === 'won' };
+      if (!state.meta.exhibitions) state.meta.exhibitions = { active: null, completed: {}, failed: {}, pool: [] };
+      if (exhibitionResolved.win) {
+        state.meta.legacyMarks = (state.meta.legacyMarks || 0) + 1;
+        state.meta.exhibitions.completed[ex] = (state.meta.exhibitions.completed[ex] || 0) + 1;
+      } else {
+        state.meta.exhibitions.failed[ex] = (state.meta.exhibitions.failed[ex] || 0) + 1;
+      }
+      state.meta.exhibitions.active = null;
+    }
+
     const gained = schematicsForPrestige();
     state.meta.schematics += gained;
     state.meta.totalSchematics = (state.meta.totalSchematics || 0) + gained;
@@ -3264,6 +3529,23 @@
         else failChallenge(challengeResolved.id);
         save();
       }, ms ? 2800 : 1400);
+    }
+    // Exhibition resolution toast + celebrate on success. Stagger after any
+    // challenge banner so all three don't collide on a big run.
+    if (exhibitionResolved) {
+      const exMeta = EXHIBITIONS[exhibitionResolved.id];
+      setTimeout(() => {
+        if (exhibitionResolved.win) {
+          celebrate('publish', {
+            bannerKind: '◆ EXHIBITION',
+            bannerMain: `+1 LEGACY MARK`,
+            bannerSub: exMeta ? exMeta.name : exhibitionResolved.id,
+            particles: 50,
+          });
+        } else {
+          toast(`<b>⚠ EXHIBITION LOST</b> — ${exMeta ? exMeta.name : exhibitionResolved.id}. Try again.`, { duration: 4000 });
+        }
+      }, ms ? 3800 : 2400);
     }
     // Blueprint: clear last-run's active Blueprint, then (once the player has
     // ≥3 lifetime prestiges) roll 3 new options and queue the choice modal.
@@ -3436,7 +3718,10 @@
   const tabTreeEl    = document.getElementById('tab-tree');
   const tabStatsEl   = document.getElementById('tab-stats');
   const tabMasteryEl = document.getElementById('tab-mastery');
+  const tabExhibitionsEl = document.getElementById('tab-exhibitions');
+  const exhTabBadgeEl = document.getElementById('exh-tab-badge');
   const masteryBodyEl = document.getElementById('mastery-body');
+  const exhibitionsBodyEl = document.getElementById('exhibitions-body');
   const achievementsBodyEl = document.getElementById('achievements-body');
   const toastStackEl = document.getElementById('toast-stack');
   const statsBodyEl = document.getElementById('stats-body');
@@ -3462,6 +3747,7 @@
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
     if (name === 'stats') renderStats();
     if (name === 'mastery') renderMastery();
+    if (name === 'exhibitions') renderExhibitions();
     if (name === 'achievements') { prevAchSig = ''; renderAchievementsSection(); }
     // Subtle whoosh on actual tab changes (not initial render)
     if (wasTab && wasTab !== name) audio.tab();
@@ -4695,6 +4981,7 @@
     tabTreeEl.classList.toggle('hidden', !treeTabVisible());
     tabStatsEl.classList.toggle('hidden', !statsTabVisible());
     tabMasteryEl.classList.toggle('hidden', !masteryTabVisible());
+    if (tabExhibitionsEl) tabExhibitionsEl.classList.toggle('hidden', !exhibitionsUnlocked());
   }
 
   function rebuildAll() {
@@ -4703,6 +4990,7 @@
     tabTreeEl.classList.toggle('hidden', !treeTabVisible());
     tabStatsEl.classList.toggle('hidden', !statsTabVisible());
     tabMasteryEl.classList.toggle('hidden', !masteryTabVisible());
+    if (tabExhibitionsEl) tabExhibitionsEl.classList.toggle('hidden', !exhibitionsUnlocked());
   }
 
   // Stats becomes relevant the moment the player owns any machine, independent
@@ -5212,6 +5500,135 @@
     if (apuThr) apuThr.addEventListener('input', (e) => {
       const v = parseInt(e.target.value, 10);
       if (!isNaN(v) && v > 0) state.settings.autoPublish.threshold = v;
+    });
+  }
+
+  // ---------- EXHIBITIONS VIEW ----------
+  function renderExhibitions() {
+    if (!exhibitionsBodyEl) return;
+    if (!exhibitionsUnlocked()) {
+      const need = Math.max(0, 30 - (state.meta.totalPatents || 0));
+      exhibitionsBodyEl.innerHTML = `
+        <div class="exh-header">
+          <div class="exh-title">EXHIBITIONS · THE ARCHIVE</div>
+        </div>
+        <div class="exh-locked">
+          <h3>◆ LOCKED</h3>
+          <p>Earn <b>30 lifetime Patents</b> to unlock this tab. Currently: <b>${fmt(state.meta.totalPatents || 0)}</b> / 30 (<b>${fmt(need)}</b> more).</p>
+          <p>Exhibitions are the third prestige layer — publish-spanning goals that reward <b>Legacy Marks</b>, a currency you spend in this Archive on permanent upgrades that persist through every reset.</p>
+        </div>`;
+      return;
+    }
+
+    const marks = state.meta.legacyMarks || 0;
+    const active = activeExhibition();
+    const exs = state.meta.exhibitions || { pool: [], completed: {}, failed: {} };
+    const pool = exs.pool || [];
+    const completedCount = Object.keys(exs.completed || {}).length;
+    const archiveOwned = Object.keys(state.meta.legacyUpgrades || {}).filter(k => state.meta.legacyUpgrades[k]).length;
+    const archiveTotal = Object.keys(LEGACY_UPGRADES).length;
+
+    // Active card or pool picker
+    let activeBlock = '';
+    if (active && EXHIBITIONS[active]) {
+      const ex = EXHIBITIONS[active];
+      activeBlock = `
+        <div class="exh-active">
+          <div class="exh-active-head">◆ ACTIVE · ${ex.name}</div>
+          <div class="exh-active-desc">${ex.desc}</div>
+          <div class="exh-active-goal">Goal: <b>${ex.goalLabel}</b> · evaluated on next Prestige</div>
+          <button class="btn warn" data-exh-abandon>ABANDON</button>
+        </div>`;
+    } else if (pool.length) {
+      activeBlock = `
+        <div class="exh-pool">
+          <div class="exh-pool-head">◆ SELECT AN EXHIBITION · ${pool.length} on offer</div>
+          <div class="exh-pool-grid">
+            ${pool.map(id => {
+              const ex = EXHIBITIONS[id];
+              if (!ex) return '';
+              const done = (exs.completed[id] || 0);
+              return `
+                <div class="exh-card" data-exh-id="${id}">
+                  <div class="exh-card-name">${ex.name}</div>
+                  <div class="exh-card-desc">${ex.desc}</div>
+                  <div class="exh-card-goal">${ex.goalLabel}</div>
+                  <div class="exh-card-meta">Completed ${done}× · reward +1 LM</div>
+                  <button class="btn" data-exh-select="${id}">SELECT</button>
+                </div>`;
+            }).join('')}
+          </div>
+          <button class="btn" data-exh-skip>SKIP THIS POOL</button>
+        </div>`;
+    } else {
+      activeBlock = `
+        <div class="exh-pool">
+          <div class="exh-pool-head">◆ NO ACTIVE EXHIBITION</div>
+          <div class="exh-pool-hint">Roll a new pool of three to pick one for your next run.</div>
+          <button class="btn" data-exh-roll>◆ ROLL EXHIBITION POOL</button>
+        </div>`;
+    }
+
+    // Archive grid
+    const archiveCards = Object.entries(LEGACY_UPGRADES).map(([id, u]) => {
+      const owned = legacyLevel(id) >= 1;
+      const afford = !owned && marks >= u.cost;
+      const cls = owned ? 'owned' : (afford ? 'affordable' : 'unaffordable');
+      return `
+        <div class="archive-card ${cls}" data-archive-id="${id}">
+          <div class="archive-name">${owned ? '◆' : '◇'} ${u.name}</div>
+          <div class="archive-desc">${u.desc}</div>
+          <div class="archive-cost">${owned ? 'OWNED' : `${u.cost} ${u.cost === 1 ? 'MARK' : 'MARKS'}`}</div>
+          ${owned ? '' : `<button class="btn" data-archive-buy="${id}" ${afford ? '' : 'disabled'}>ACQUIRE</button>`}
+        </div>`;
+    }).join('');
+
+    exhibitionsBodyEl.innerHTML = `
+      <div class="exh-header">
+        <div class="exh-title">EXHIBITIONS · THE ARCHIVE</div>
+        <div class="exh-stats">
+          <div class="st"><div class="k">LEGACY MARKS</div><div class="v lm">${fmt(marks)}</div></div>
+          <div class="st"><div class="k">COMPLETED</div><div class="v">${completedCount} / ${Object.keys(EXHIBITIONS).length}</div></div>
+          <div class="st"><div class="k">ARCHIVE</div><div class="v">${archiveOwned} / ${archiveTotal}</div></div>
+        </div>
+      </div>
+      ${activeBlock}
+      <div class="section-title">◆ THE ARCHIVE · SPEND LEGACY MARKS FOR PERMANENT UPGRADES</div>
+      <div class="archive-grid">${archiveCards}</div>
+    `;
+
+    // Wire up event handlers
+    const rollBtn = exhibitionsBodyEl.querySelector('[data-exh-roll]');
+    if (rollBtn) rollBtn.addEventListener('click', () => {
+      if (!state.meta.exhibitions) state.meta.exhibitions = { active: null, completed: {}, failed: {}, pool: [] };
+      state.meta.exhibitions.pool = rollExhibitionPool();
+      save();
+      renderExhibitions();
+    });
+    const abandonBtn = exhibitionsBodyEl.querySelector('[data-exh-abandon]');
+    if (abandonBtn) abandonBtn.addEventListener('click', () => {
+      showModal('ABANDON EXHIBITION?',
+        `<p>Clear the active exhibition? No penalty — you can roll a new one immediately.</p>`,
+        { confirmLabel: 'ABANDON', onConfirm: (bg) => {
+          if (state.meta.exhibitions) state.meta.exhibitions.active = null;
+          bg.remove(); save(); renderExhibitions();
+        }});
+    });
+    exhibitionsBodyEl.querySelectorAll('[data-exh-select]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectExhibition(btn.dataset.exhSelect);
+        renderExhibitions();
+      });
+    });
+    const skipBtn = exhibitionsBodyEl.querySelector('[data-exh-skip]');
+    if (skipBtn) skipBtn.addEventListener('click', () => {
+      skipExhibitions();
+      renderExhibitions();
+    });
+    exhibitionsBodyEl.querySelectorAll('[data-archive-buy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (buyLegacyUpgrade(btn.dataset.archiveBuy)) renderExhibitions();
+      });
     });
   }
 
