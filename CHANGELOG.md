@@ -4,6 +4,16 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] — 2026-04-18
+
+Vertical progression balance pass. Early feedback was that players could reach the endgame using only the base (slot 1–3) machines in each tier and never need the MK-IV / MK-V variants the research tree gates behind Power. This pass tightens the base-tier scaling wall so those upgrades become the only efficient next step, *without* making them cheaper — runs shouldn't get shorter, they should get steeper.
+
+### Balance
+
+- **Slots 1–3 costMul +0.02 across T1–T5** — base machines now hit their exponential wall noticeably sooner. The break-even point where the next base machine costs the same as a single MK-IV moves down from ~51 owned to ~43 owned, so the upgrade decision lands naturally while you're still in the tier. MK-IV and MK-V costs are intentionally unchanged — cheaper upgrades would only accelerate runs, which is the opposite of the fix this patch ships.
+- **T6 untouched** — the Refinement tier has only three slots and already uses steep costMul values (1.27 / 1.3 / 1.32).
+- **Existing saves keep all owned machines** — cost changes only affect the next purchase, so there are no broken states or lost inventory.
+
 ## [0.6.2] — 2026-04-18
 
 Hotfix for two issues reported in itch.io comments.

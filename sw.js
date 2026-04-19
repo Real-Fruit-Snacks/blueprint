@@ -4,7 +4,7 @@
    cache fallback. Bump CACHE_NAME whenever shipping new assets so clients pull
    the fresh shell on the next load.
 */
-const CACHE_NAME = 'blueprint-v0.6.2-1';
+const CACHE_NAME = 'blueprint-v0.6.3-1';
 const PRECACHE = [
   './',
   './index.html',

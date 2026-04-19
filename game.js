@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.6.2 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.6.3 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.6.2';
+  const VERSION = '0.6.3';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -85,39 +85,46 @@
 
   // ---------- MACHINES ----------
   // slot: position within the 5-wide tier row. mk: base | mk4 | mk5 (gates on tree unlock).
+  // v0.6.3 balance pass: slots 1-3 costMul +0.02 across T1-T5 so base machines
+  // hit their exponential wall sooner. The 51st drill used to cost ~30K ore —
+  // the same as a single MK-IV deep_drill (5× the output). With the tighter
+  // curve, that break-even point moves to ~43 drills, pushing the upgrade
+  // decision naturally. MK-IV / MK-V costs unchanged — making them cheaper
+  // only accelerates runs, which was the other half of the feedback. T6
+  // untouched (no MK slots, already steep costMul).
   const MACHINES = {
     // T1 · Extraction
-    drill:          { tier: 1, slot: 1, mk: 'base', name: 'DRILL',          produces: { ore: 1 },        consumes: {},                cost: { ore: 10 },          costMul: 1.17, icon: ICONS.drill },
-    miner:          { tier: 1, slot: 2, mk: 'base', name: 'MINER',          produces: { ore: 6 },        consumes: {},                cost: { ore: 120 },         costMul: 1.19, icon: ICONS.miner },
-    excavator:      { tier: 1, slot: 3, mk: 'base', name: 'EXCAVATOR',      produces: { ore: 40 },       consumes: {},                cost: { ore: 2000 },        costMul: 1.21, icon: ICONS.excavator },
+    drill:          { tier: 1, slot: 1, mk: 'base', name: 'DRILL',          produces: { ore: 1 },        consumes: {},                cost: { ore: 10 },          costMul: 1.19, icon: ICONS.drill },
+    miner:          { tier: 1, slot: 2, mk: 'base', name: 'MINER',          produces: { ore: 6 },        consumes: {},                cost: { ore: 120 },         costMul: 1.21, icon: ICONS.miner },
+    excavator:      { tier: 1, slot: 3, mk: 'base', name: 'EXCAVATOR',      produces: { ore: 40 },       consumes: {},                cost: { ore: 2000 },        costMul: 1.23, icon: ICONS.excavator },
     deep_drill:     { tier: 1, slot: 4, mk: 'mk4',  name: 'DEEP DRILL',     produces: { ore: 200 },      consumes: {},                cost: { ore: 30000 },       costMul: 1.24, icon: ICONS.deep_drill },
     core_extractor: { tier: 1, slot: 5, mk: 'mk5',  name: 'CORE EXTRACTOR', produces: { ore: 1000 },     consumes: {},                cost: { ore: 500000 },      costMul: 1.27, icon: ICONS.core_extractor },
 
     // T2 · Smelting
-    furnace:        { tier: 2, slot: 1, mk: 'base', name: 'FURNACE',        produces: { ingot: 1 },      consumes: { ore: 3 },        cost: { ore: 100 },         costMul: 1.19, icon: ICONS.furnace },
-    smelter:        { tier: 2, slot: 2, mk: 'base', name: 'SMELTER',        produces: { ingot: 6 },      consumes: { ore: 18 },       cost: { ore: 1000, ingot: 10 },          costMul: 1.21, icon: ICONS.smelter },
-    foundry:        { tier: 2, slot: 3, mk: 'base', name: 'FOUNDRY',        produces: { ingot: 40 },     consumes: { ore: 120 },      cost: { ore: 15000, ingot: 200 },        costMul: 1.23, icon: ICONS.foundry },
+    furnace:        { tier: 2, slot: 1, mk: 'base', name: 'FURNACE',        produces: { ingot: 1 },      consumes: { ore: 3 },        cost: { ore: 100 },         costMul: 1.21, icon: ICONS.furnace },
+    smelter:        { tier: 2, slot: 2, mk: 'base', name: 'SMELTER',        produces: { ingot: 6 },      consumes: { ore: 18 },       cost: { ore: 1000, ingot: 10 },          costMul: 1.23, icon: ICONS.smelter },
+    foundry:        { tier: 2, slot: 3, mk: 'base', name: 'FOUNDRY',        produces: { ingot: 40 },     consumes: { ore: 120 },      cost: { ore: 15000, ingot: 200 },        costMul: 1.25, icon: ICONS.foundry },
     crucible:       { tier: 2, slot: 4, mk: 'mk4',  name: 'CRUCIBLE',       produces: { ingot: 200 },    consumes: { ore: 600 },      cost: { ore: 200000, ingot: 3000 },      costMul: 1.25, icon: ICONS.crucible },
     arc_forge:      { tier: 2, slot: 5, mk: 'mk5',  name: 'ARC FORGE',      produces: { ingot: 1000 },   consumes: { ore: 3000 },     cost: { ore: 3000000, ingot: 50000 },    costMul: 1.27, icon: ICONS.arc_forge },
 
     // T3 · Fabrication
-    press:          { tier: 3, slot: 1, mk: 'base', name: 'PRESS',          produces: { part: 1 },       consumes: { ingot: 3 },      cost: { ingot: 200 },       costMul: 1.2, icon: ICONS.press },
-    fabricator:     { tier: 3, slot: 2, mk: 'base', name: 'FABRICATOR',     produces: { part: 6 },       consumes: { ingot: 18 },     cost: { ingot: 2000, part: 20 },         costMul: 1.22, icon: ICONS.fabricator },
-    lathe:          { tier: 3, slot: 3, mk: 'base', name: 'LATHE',          produces: { part: 40 },      consumes: { ingot: 120 },    cost: { ingot: 30000, part: 500 },       costMul: 1.24, icon: ICONS.lathe },
+    press:          { tier: 3, slot: 1, mk: 'base', name: 'PRESS',          produces: { part: 1 },       consumes: { ingot: 3 },      cost: { ingot: 200 },       costMul: 1.22, icon: ICONS.press },
+    fabricator:     { tier: 3, slot: 2, mk: 'base', name: 'FABRICATOR',     produces: { part: 6 },       consumes: { ingot: 18 },     cost: { ingot: 2000, part: 20 },         costMul: 1.24, icon: ICONS.fabricator },
+    lathe:          { tier: 3, slot: 3, mk: 'base', name: 'LATHE',          produces: { part: 40 },      consumes: { ingot: 120 },    cost: { ingot: 30000, part: 500 },       costMul: 1.26, icon: ICONS.lathe },
     mill:           { tier: 3, slot: 4, mk: 'mk4',  name: 'MILL',           produces: { part: 200 },     consumes: { ingot: 600 },    cost: { ingot: 500000, part: 10000 },    costMul: 1.25, icon: ICONS.mill },
     injector:       { tier: 3, slot: 5, mk: 'mk5',  name: 'INJECTOR',       produces: { part: 1000 },    consumes: { ingot: 3000 },   cost: { ingot: 8000000, part: 150000 },  costMul: 1.27, icon: ICONS.injector },
 
     // T4 · Assembly
-    assembler:      { tier: 4, slot: 1, mk: 'base', name: 'ASSEMBLER',      produces: { circuit: 1 },    consumes: { part: 3 },       cost: { part: 400 },        costMul: 1.21, icon: ICONS.assembler },
-    wirer:          { tier: 4, slot: 2, mk: 'base', name: 'WIRER',          produces: { circuit: 6 },    consumes: { part: 18 },      cost: { part: 4000, circuit: 30 },         costMul: 1.23, icon: ICONS.wirer },
-    printer:        { tier: 4, slot: 3, mk: 'base', name: 'PRINTER',        produces: { circuit: 40 },   consumes: { part: 120 },     cost: { part: 70000, circuit: 800 },       costMul: 1.25, icon: ICONS.printer },
+    assembler:      { tier: 4, slot: 1, mk: 'base', name: 'ASSEMBLER',      produces: { circuit: 1 },    consumes: { part: 3 },       cost: { part: 400 },        costMul: 1.23, icon: ICONS.assembler },
+    wirer:          { tier: 4, slot: 2, mk: 'base', name: 'WIRER',          produces: { circuit: 6 },    consumes: { part: 18 },      cost: { part: 4000, circuit: 30 },         costMul: 1.25, icon: ICONS.wirer },
+    printer:        { tier: 4, slot: 3, mk: 'base', name: 'PRINTER',        produces: { circuit: 40 },   consumes: { part: 120 },     cost: { part: 70000, circuit: 800 },       costMul: 1.27, icon: ICONS.printer },
     modulator:      { tier: 4, slot: 4, mk: 'mk4',  name: 'MODULATOR',      produces: { circuit: 200 },  consumes: { part: 600 },     cost: { part: 1000000, circuit: 15000 },   costMul: 1.26, icon: ICONS.modulator },
     quantum_wire:   { tier: 4, slot: 5, mk: 'mk5',  name: 'QUANTUM WIRE',   produces: { circuit: 1000 }, consumes: { part: 3000 },    cost: { part: 20000000, circuit: 250000 }, costMul: 1.28, icon: ICONS.quantum_wire },
 
     // T5 · Core Forge
-    forge:          { tier: 5, slot: 1, mk: 'base', name: 'FORGE',          produces: { core: 1 },       consumes: { circuit: 3 },    cost: { circuit: 800 },     costMul: 1.22, icon: ICONS.forge },
-    compiler:       { tier: 5, slot: 2, mk: 'base', name: 'COMPILER',       produces: { core: 6 },       consumes: { circuit: 18 },   cost: { circuit: 8000, core: 50 },           costMul: 1.24, icon: ICONS.compiler },
-    synthesizer:    { tier: 5, slot: 3, mk: 'base', name: 'SYNTHESIZER',    produces: { core: 40 },      consumes: { circuit: 120 },  cost: { circuit: 150000, core: 1200 },       costMul: 1.26, icon: ICONS.synthesizer },
+    forge:          { tier: 5, slot: 1, mk: 'base', name: 'FORGE',          produces: { core: 1 },       consumes: { circuit: 3 },    cost: { circuit: 800 },     costMul: 1.24, icon: ICONS.forge },
+    compiler:       { tier: 5, slot: 2, mk: 'base', name: 'COMPILER',       produces: { core: 6 },       consumes: { circuit: 18 },   cost: { circuit: 8000, core: 50 },           costMul: 1.26, icon: ICONS.compiler },
+    synthesizer:    { tier: 5, slot: 3, mk: 'base', name: 'SYNTHESIZER',    produces: { core: 40 },      consumes: { circuit: 120 },  cost: { circuit: 150000, core: 1200 },       costMul: 1.28, icon: ICONS.synthesizer },
     resonator:      { tier: 5, slot: 4, mk: 'mk4',  name: 'RESONATOR',      produces: { core: 200 },     consumes: { circuit: 600 },  cost: { circuit: 2000000, core: 25000 },     costMul: 1.27, icon: ICONS.resonator },
     star_forge:     { tier: 5, slot: 5, mk: 'mk5',  name: 'STAR FORGE',     produces: { core: 1000 },    consumes: { circuit: 3000 }, cost: { circuit: 35000000, core: 400000 },   costMul: 1.29, icon: ICONS.star_forge },
 
