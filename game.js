@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.9.2 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.9.3 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.9.2';
+  const VERSION = '0.9.3';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -2751,8 +2751,15 @@
       state.resources.ore = Math.max(state.resources.ore || 0, 10000);
     }
     // DRAFTING HEIRLOOM legacy — +1 starting drill, stacks on top of fast_start.
+    // Clamp against TALL's per-type cap so future changes to fast_start /
+    // heirloom values can't push the opening state over-cap. Currently
+    // fast_start clamps to 2 under TALL, +1 heirloom = 3 = exactly at cap;
+    // this guard keeps it at the cap even if one side gets bumped later.
     if ((state.meta.legacyUpgrades || {}).drafting_heirloom) {
-      state.machines.drill = (state.machines.drill || 0) + 1;
+      const current = state.machines.drill || 0;
+      const target = current + 1;
+      const tallCap = activeChallenge() === 'tall' ? 3 : Infinity;
+      state.machines.drill = Math.min(target, tallCap);
     }
   }
 
@@ -3716,93 +3723,105 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
     catch (e) { console.error('[blueprint] save failed', e); }
   }
+  // Apply every version-to-version fixup, default-filling, and
+  // shape-normalising pass needed to bring a parsed save into sync with the
+  // current freshState() shape. Shared between load() (localStorage) and
+  // importSave() (base64 paste) so both paths converge on identical state.
+  function migrateState(parsed) {
+    // migrate old Phase 4 research.owned → new levels
+    if (parsed.research && parsed.research.owned && !parsed.research.levels) {
+      console.log('[blueprint] migrating research to v0.6.0');
+      parsed.research = { levels: { origin: 1 } };
+    }
+
+    // migrate pre-v0.7.0 saves: grant tier unlocks based on past production
+    if (parsed.research && !parsed.research.tiersUnlocked) {
+      console.log('[blueprint] granting tier unlocks from prior progress');
+      parsed.research.tiersUnlocked = { 2: false, 3: false, 4: false, 5: false };
+      const t = (parsed.meta && parsed.meta.totalProduced) || {};
+      if ((t.ore     || 0) >= 50) parsed.research.tiersUnlocked[2] = true;
+      if ((t.ingot   || 0) >= 30) parsed.research.tiersUnlocked[3] = true;
+      if ((t.part    || 0) >= 25) parsed.research.tiersUnlocked[4] = true;
+      if ((t.circuit || 0) >= 15) parsed.research.tiersUnlocked[5] = true;
+    }
+
+    const s = Object.assign(freshState(), parsed);
+    s.resources = Object.assign(emptyResources(), s.resources || {});
+    s.machines  = Object.assign(emptyMachines(),  s.machines  || {});
+    s.supports  = Object.assign(emptySupports(),  s.supports  || {});
+    s.research  = Object.assign(freshResearch(),  s.research  || {});
+    s.research.levels = Object.assign({ origin: 1 }, s.research.levels || {});
+    if (!s.research.levels.origin) s.research.levels.origin = 1;
+    s.research.tiersUnlocked = Object.assign({ 2: false, 3: false, 4: false, 5: false, 6: false }, s.research.tiersUnlocked || {});
+    s.research.patentLevels = s.research.patentLevels || {};
+    s.settings = Object.assign(freshState().settings, s.settings || {});
+    s.settings.autoBuy = s.settings.autoBuy || {};
+    s.settings.hintsShown = s.settings.hintsShown || {};
+    s.settings.autoPrestige = s.settings.autoPrestige || { enabled: false, threshold: 10 };
+    s.settings.autoPublish  = s.settings.autoPublish  || { enabled: false, threshold: 10 };
+    if (s.settings.tipsMuted == null) s.settings.tipsMuted = false;
+    if (s.settings.achievementsExpanded == null) s.settings.achievementsExpanded = false;
+    if (s.settings.haptics == null) s.settings.haptics = true;
+    if (s.settings.reduceMotion === undefined) s.settings.reduceMotion = null;
+    if (s.settings.colorblindMode == null) s.settings.colorblindMode = false;
+    s.settings.autoMine = Object.assign({ ore: true, ingot: false, part: false, circuit: false, core: false, prototype: false }, s.settings.autoMine || {});
+    s.meta.achievements = s.meta.achievements || {};
+    s.meta.newAchievements = s.meta.newAchievements || {};
+    if (s.meta.goldenTicksSeen == null) s.meta.goldenTicksSeen = 0;
+    s.meta.clickProgress = Object.assign({ ore: 0, ingot: 0, part: 0, circuit: 0, core: 0, prototype: 0 }, s.meta.clickProgress || {});
+    s.meta.onboarding = Object.assign({ step: 0, done: false }, s.meta.onboarding || {});
+    if (!s.meta.onboarding.done) {
+      const alreadyPlayed = (s.meta.prestigeCount || 0) > 0
+        || (s.meta.publishCount || 0) > 0
+        || (s.meta.lifetimeSchematics || 0) > 0;
+      if (alreadyPlayed) s.meta.onboarding.done = true;
+    }
+    s.meta.history = Array.isArray(s.meta.history) ? s.meta.history : [];
+    if (s.meta.lifetimeClicks == null) s.meta.lifetimeClicks = s.meta.totalClicks || 0;
+    if (s.meta.flashesSeen == null) s.meta.flashesSeen = 0;
+    if (s.meta.peakMachines == null) s.meta.peakMachines = 0;
+    if (s.meta.fastestPrestigeSec == null) s.meta.fastestPrestigeSec = Infinity;
+    if (!isFinite(s.meta.fastestPrestigeSec)) s.meta.fastestPrestigeSec = Infinity;
+    if (s.meta.noClickPrestige == null) s.meta.noClickPrestige = false;
+    if (s.meta.noResearchPrestige == null) s.meta.noResearchPrestige = false;
+    if (s.meta.minMachinePrestige == null) s.meta.minMachinePrestige = false;
+    if (s.meta.noSupportPublish == null) s.meta.noSupportPublish = false;
+    s.meta.challenge = Object.assign({ active: null, startedAt: 0, completed: {} }, s.meta.challenge || {});
+    if (s.meta.currentRunResearchBought == null) s.meta.currentRunResearchBought = false;
+    if (s.meta.firstPrototypeCelebrated == null) {
+      const lp = (s.meta.lifetimeProduced && s.meta.lifetimeProduced.prototype) || 0;
+      s.meta.firstPrototypeCelebrated = lp >= 1;
+    }
+    s.meta.blueprints = Object.assign(
+      { active: null, pool: [], timesUsed: {}, seen: {} },
+      s.meta.blueprints || {}
+    );
+    // v0.8.0 — Exhibitions / Archive defaults for saves from before the endgame shipped.
+    if (s.meta.legacyMarks == null) s.meta.legacyMarks = 0;
+    s.meta.legacyUpgrades = s.meta.legacyUpgrades || {};
+    s.meta.exhibitions = Object.assign(
+      { active: null, completed: {}, failed: {}, pool: [] },
+      s.meta.exhibitions || {}
+    );
+    if (s.meta.firstLegacyMarkCelebrated == null) s.meta.firstLegacyMarkCelebrated = false;
+    if (s.meta.archiveCompleteCelebrated == null) s.meta.archiveCompleteCelebrated = false;
+    s.meta = Object.assign(freshState().meta, s.meta || {});
+    s.meta.totalProduced = Object.assign(emptyResources(), s.meta.totalProduced || {});
+    s.meta.lifetimeProduced = Object.assign(emptyResources(), s.meta.lifetimeProduced || {});
+    for (const r in s.meta.lifetimeProduced) {
+      if (s.meta.lifetimeProduced[r] === 0 && s.meta.totalProduced[r] > 0) {
+        s.meta.lifetimeProduced[r] = s.meta.totalProduced[r];
+      }
+    }
+    return s;
+  }
+
   function load() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw);
-
-      // migrate old Phase 4 research.owned → new levels
-      if (parsed.research && parsed.research.owned && !parsed.research.levels) {
-        console.log('[blueprint] migrating research to v0.6.0');
-        parsed.research = { levels: { origin: 1 } };
-      }
-
-      // migrate pre-v0.7.0 saves: grant tier unlocks based on past production
-      if (parsed.research && !parsed.research.tiersUnlocked) {
-        console.log('[blueprint] granting tier unlocks from prior progress');
-        parsed.research.tiersUnlocked = { 2: false, 3: false, 4: false, 5: false };
-        const t = (parsed.meta && parsed.meta.totalProduced) || {};
-        if ((t.ore     || 0) >= 50) parsed.research.tiersUnlocked[2] = true;
-        if ((t.ingot   || 0) >= 30) parsed.research.tiersUnlocked[3] = true;
-        if ((t.part    || 0) >= 25) parsed.research.tiersUnlocked[4] = true;
-        if ((t.circuit || 0) >= 15) parsed.research.tiersUnlocked[5] = true;
-      }
-
-      state = Object.assign(freshState(), parsed);
-      state.resources = Object.assign(emptyResources(), state.resources || {});
-      state.machines  = Object.assign(emptyMachines(),  state.machines  || {});
-      state.supports  = Object.assign(emptySupports(),  state.supports  || {});
-      state.research  = Object.assign(freshResearch(),  state.research  || {});
-      // Origin is the free seed node — always owned on any save, migrated or fresh.
-      state.research.levels = Object.assign({ origin: 1 }, state.research.levels || {});
-      if (!state.research.levels.origin) state.research.levels.origin = 1;
-      state.research.tiersUnlocked = Object.assign({ 2: false, 3: false, 4: false, 5: false, 6: false }, state.research.tiersUnlocked || {});
-      state.research.patentLevels = state.research.patentLevels || {};
-      state.settings = Object.assign(freshState().settings, state.settings || {});
-      state.settings.autoBuy = state.settings.autoBuy || {};
-      state.settings.hintsShown = state.settings.hintsShown || {};
-      state.settings.autoPrestige = state.settings.autoPrestige || { enabled: false, threshold: 10 };
-      state.settings.autoPublish  = state.settings.autoPublish  || { enabled: false, threshold: 10 };
-      if (state.settings.tipsMuted == null) state.settings.tipsMuted = false;
-      if (state.settings.achievementsExpanded == null) state.settings.achievementsExpanded = false;
-      if (state.settings.haptics == null) state.settings.haptics = true;
-      if (state.settings.reduceMotion === undefined) state.settings.reduceMotion = null;
-      if (state.settings.colorblindMode == null) state.settings.colorblindMode = false;
-      state.settings.autoMine = Object.assign({ ore: true, ingot: false, part: false, circuit: false, core: false, prototype: false }, state.settings.autoMine || {});
-      state.meta.achievements = state.meta.achievements || {};
-      state.meta.newAchievements = state.meta.newAchievements || {};
-      if (state.meta.goldenTicksSeen == null) state.meta.goldenTicksSeen = 0;
-      state.meta.clickProgress = Object.assign({ ore: 0, ingot: 0, part: 0, circuit: 0, core: 0, prototype: 0 }, state.meta.clickProgress || {});
-      state.meta.onboarding = Object.assign({ step: 0, done: false }, state.meta.onboarding || {});
-      // Migration: any existing save with real progress skips the tutorial entirely.
-      if (!state.meta.onboarding.done) {
-        const alreadyPlayed = (state.meta.prestigeCount || 0) > 0
-          || (state.meta.publishCount || 0) > 0
-          || (state.meta.lifetimeSchematics || 0) > 0;
-        if (alreadyPlayed) state.meta.onboarding.done = true;
-      }
-      state.meta.history = Array.isArray(state.meta.history) ? state.meta.history : [];
-      if (state.meta.lifetimeClicks == null) state.meta.lifetimeClicks = state.meta.totalClicks || 0;
-      if (state.meta.flashesSeen == null) state.meta.flashesSeen = 0;
-      if (state.meta.peakMachines == null) state.meta.peakMachines = 0;
-      if (state.meta.fastestPrestigeSec == null) state.meta.fastestPrestigeSec = Infinity;
-      if (!isFinite(state.meta.fastestPrestigeSec)) state.meta.fastestPrestigeSec = Infinity;
-      if (state.meta.noClickPrestige == null) state.meta.noClickPrestige = false;
-      if (state.meta.noResearchPrestige == null) state.meta.noResearchPrestige = false;
-      if (state.meta.minMachinePrestige == null) state.meta.minMachinePrestige = false;
-      if (state.meta.noSupportPublish == null) state.meta.noSupportPublish = false;
-      state.meta.challenge = Object.assign({ active: null, startedAt: 0, completed: {} }, state.meta.challenge || {});
-      if (state.meta.currentRunResearchBought == null) state.meta.currentRunResearchBought = false;
-      if (state.meta.firstPrototypeCelebrated == null) {
-        // Existing saves: if they already produced prototype, mark as celebrated
-        // so we don't retroactively pop a banner for a moment that already passed.
-        const lp = (state.meta.lifetimeProduced && state.meta.lifetimeProduced.prototype) || 0;
-        state.meta.firstPrototypeCelebrated = lp >= 1;
-      }
-      state.meta.blueprints = Object.assign(
-        { active: null, pool: [], timesUsed: {}, seen: {} },
-        state.meta.blueprints || {}
-      );
-      state.meta = Object.assign(freshState().meta, state.meta || {});
-      state.meta.totalProduced = Object.assign(emptyResources(), state.meta.totalProduced || {});
-      state.meta.lifetimeProduced = Object.assign(emptyResources(), state.meta.lifetimeProduced || {});
-      // bootstrap lifetime from current run if missing (older saves)
-      for (const r in state.meta.lifetimeProduced) {
-        if (state.meta.lifetimeProduced[r] === 0 && state.meta.totalProduced[r] > 0) {
-          state.meta.lifetimeProduced[r] = state.meta.totalProduced[r];
-        }
-      }
+      state = migrateState(parsed);
       invalidateRM();
       return true;
     } catch (e) { console.error('[blueprint] load failed', e); return false; }
@@ -3811,7 +3830,9 @@
   function importSave(b64) {
     try {
       const parsed = JSON.parse(decodeURIComponent(escape(atob(b64.trim()))));
-      state = Object.assign(freshState(), parsed);
+      // Run the same migration pipeline as load() so a v0.6 export imported
+      // into v0.9 picks up every new field / default just like a reload would.
+      state = migrateState(parsed);
       invalidateRM();
       save(); return true;
     } catch { return false; }

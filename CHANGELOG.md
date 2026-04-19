@@ -4,6 +4,24 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] — 2026-04-19
+
+Full code audit pass. A delegated Explore agent swept the codebase for gating / migration / interaction / logic bugs across the v0.7–v0.9 additions. 33 items examined; most were defensive-code-already-sound. Two real fixes landed.
+
+### Fixed
+
+- **`importSave()` now runs the same migration pipeline as `load()`.** Previously a v0.6 save exported to base64 and imported into v0.9 landed as `Object.assign(freshState(), parsed)` — which skipped the ~80 line default-filling / shape-normalising block that `load()` ran on every reload. All the endgame fields (`legacyMarks`, `legacyUpgrades`, `exhibitions`, `firstLegacyMarkCelebrated`, `archiveCompleteCelebrated`) plus older migrations (origin repair, onboarding skip for veteran saves, per-run click-progress defaults, etc.) are now applied on both paths. Extracted into a shared `migrateState(parsed)` helper so the two paths can't drift again.
+- **DRAFTING HEIRLOOM clamped under TALL.** The Legacy upgrade adds +1 starting drill unconditionally. Combined with `fast_start` (already clamped to 2 under TALL in v0.6.3) this landed at 3 drills — exactly TALL's 3-per-type cap. Currently safe, but fragile — a future bump to either side could push past the cap mid-run. DRAFTING HEIRLOOM now also clamps against TALL's cap so the opening state can never violate it regardless of other balance changes.
+
+### Not bugs (verified)
+
+- Auto-mine does NOT count toward `totalClicks`; SILENT_EXHIBITION correctly only tracks manual clicks.
+- `evaluateExhibition()` already guards against orphaned exhibition IDs (`if (!ex) return null`).
+- Challenge + Exhibition coexistence is intentional (two orthogonal layers, both can reward).
+- FOURTH_BLUEPRINT + ECHO reward both setting `extraBlueprintRoll = true` is correct (binary flag, no additive stacking intended).
+- IRONMAN's "no heirlooms" scope is patent-specific; Legacy Marks are a distinct system and correctly NOT suppressed by IRONMAN.
+- ARCHIVIST blueprint + EFFICIENT_MIND legacy multiplicatively compound via `m.researchCostMul` — correct.
+
 ## [0.9.2] — 2026-04-19
 
 Dedicated balance pass on the T6 → Prototype → Patent pipeline. Player feedback (long-standing, pre-v0.9) was that by the time prototypes were available at all, they already had enough to unlock most of the mastery library. The v0.6.1 cube-root nerf and v0.9.1 offline-cap fixes addressed adjacent issues but left the core pipeline too generous.
