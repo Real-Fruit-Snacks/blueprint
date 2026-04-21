@@ -4,6 +4,31 @@ All notable changes to **Blueprint** are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] — 2026-04-21
+
+Follow-up balance pass on the patent curve. The v0.9.2 `cbrt × 2` tighten dialed in normal-pace runs (100 K protos ≈ 92 patents, full mastery in 8–12 publishes) but it was still unbounded — a player who left the tab running for 24–48 h on a first run could stockpile trillions of prototypes and cash out 10 000 – 100 000+ patents in a single publish, collapsing mastery into one overnight run. Reported by players as still-too-easy late game.
+
+### Balance
+
+- **`patentsForPublish` now softcaps above 100 patents per publish.** The cube-root curve is preserved for normal play; above raw = 100, the surplus is compressed with a 0.65 exponent. Normal publishes are unchanged; extreme stockpile runs are clamped to a few thousand patents instead of scaling without limit.
+
+  | Prototypes | Old patents | New patents |
+  | :--- | ---: | ---: |
+  | 100 K | 92 | 92 |
+  | 1 M | 200 | 119 |
+  | 1 B | 2 000 | 235 |
+  | 1 T | 20 000 | 722 |
+  | 1 e14 | 92 831 | 1 793 |
+  | 1 e15 | 200 000 | 2 889 |
+
+  Players in the 1 K – 500 K prototype band (the normal first-publish range) see zero change. Moderate idlers (10 M – 100 M) lose roughly 40 %. Overnight-farm exploits lose 95 – 99 %. Full mastery (~904 patents) still takes the intended 8–12 publishes; a dedicated stockpile run now shaves 2–3 publishes off rather than ending the meta-layer outright.
+
+### Notes
+
+- No save migration. Existing patents and progress are preserved; only the per-publish formula changes going forward.
+- The softcap is monotonic (more prototypes always = more patents) and smooth below raw = 100. The only discontinuity is in the first derivative at the softcap boundary, which is imperceptible in practice.
+- PATRONS legacy (+10 % patents) and RECURSIVE patent (+1 per 40 research levels) still layer on top of the softcapped base — late-game progression still scales, just not to the point where one run can replace all of them.
+
 ## [0.9.3] — 2026-04-19
 
 Full code audit pass. A delegated Explore agent swept the codebase for gating / migration / interaction / logic bugs across the v0.7–v0.9 additions. 33 items examined; most were defensive-code-already-sound. Two real fixes landed.

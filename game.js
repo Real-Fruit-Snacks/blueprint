@@ -1,4 +1,4 @@
-/* ========== BLUEPRINT · v0.9.3 · Phase 4+5 (Redesign) ==========
+/* ========== BLUEPRINT · v0.9.4 · Phase 4+5 (Redesign) ==========
    Prestige-driven tree with Schematics currency. Leveled + unlock nodes.
    MK-IV / MK-V machines (10 new). New mechanics: momentum, lossless,
    bulk-buy, auto-buy, auto-click, double-pay.
@@ -12,7 +12,7 @@
   const SAVE_INTERVAL = 5000;
   const OFFLINE_CAP_MS = 8 * 3600 * 1000;
   const OFFLINE_REPORT_MS = 30_000;
-  const VERSION = '0.9.3';
+  const VERSION = '0.9.4';
   const LOG_MAX = 20;
   const MOMENTUM_CAP = 0.5;          // +50% max from momentum
   const LOSSLESS_FLOOR = 0.5;        // bottlenecked production floor
@@ -2625,16 +2625,35 @@
   // ---------- PUBLISH (meta-prestige) ----------
   function canPublish() { return (state.resources.prototype || 0) >= 1; }
   function patentsForPublish() {
-    // v0.9.2 balance pass: further tightened from cbrt*3 to cbrt*2 after a
-    // player reported that the first prestige with prototypes already gave
-    // enough patents for most of the mastery library. Same curve shape,
-    // 33 % lower coefficient — first publishes stay meaningful without
-    // collapsing mastery progression into 1–2 runs.
-    // 10 proto → 4 · 100 → 9 · 1K → 20 · 10K → 43 · 100K → 92 · 1M → 200.
-    // Full unlock cost (~904 patents) now requires 8–12 publishes instead
-    // of 3–5, matching the 25–40 h target play arc.
+    // v0.9.2 balance pass: tightened from cbrt*3 to cbrt*2 after players
+    // reported the first prestige already unlocked most of mastery.
+    //
+    // v0.9.4 softcap pass: cbrt alone is unbounded, so stockpile runs
+    // (leaving the tab open 24-48 h so prototypes accumulate into the
+    // trillions) were still producing tens of thousands of patents per
+    // publish. The cbrt curve is preserved up to 100 patents (normal
+    // play), then compressed with a 0.65 exponent so extreme proto counts
+    // can no longer inflate beyond a few thousand patents per publish.
+    //
+    //      proto      raw (cbrt*2)   softcapped
+    //      10         4              4
+    //      1K         20             20
+    //      100K       92             92
+    //      1M         200            119
+    //      1B         2 000          235
+    //      1T         20 000         722
+    //      1e14       92 831         1 793
+    //      1e15       200 000        2 889
+    //
+    // Full unlock cost (~904 patents) takes 8–12 normal publishes,
+    // matching the 25–40 h target arc. A stockpile exploit now shaves
+    // at most 2–3 publishes off that, instead of collapsing the whole
+    // meta-layer into a single overnight run.
     const proto = state.resources.prototype || 0;
-    let base = proto > 0 ? Math.floor(Math.cbrt(proto) * 2) : 0;
+    let raw = proto > 0 ? Math.cbrt(proto) * 2 : 0;
+    const SOFTCAP = 100;
+    if (raw > SOFTCAP) raw = SOFTCAP + Math.pow(raw - SOFTCAP, 0.65);
+    let base = Math.floor(raw);
     // RECURSIVE patent: +1 per 40 research levels owned (excluding origin)
     if (patentLevel('recursive') > 0) {
       let lvls = 0;
