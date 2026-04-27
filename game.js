@@ -2741,9 +2741,12 @@
     //      1e15       200 000        2 889
     //
     // Full unlock cost (~904 patents) takes 8–12 normal publishes,
-    // matching the 25–40 h target arc. A stockpile exploit now shaves
-    // at most 2–3 publishes off that, instead of collapsing the whole
-    // meta-layer into a single overnight run.
+    // matching the 10–20 h target play arc. A stockpile exploit now
+    // shaves at most 2–3 publishes off that, instead of collapsing the
+    // whole meta-layer into a single overnight run.
+    // (Target arc revised from 25–40 h after multiple player reports
+    // showed the game finishing well under that range; stack of
+    // multiplicative bonuses compounds faster than originally modelled.)
     const proto = state.resources.prototype || 0;
     let raw = proto > 0 ? Math.cbrt(proto) * 2 : 0;
     const SOFTCAP = 100;
